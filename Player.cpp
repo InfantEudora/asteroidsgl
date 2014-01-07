@@ -3,6 +3,11 @@
 #include <string.h>
 #include <stdlib.h>
 
+#include "asteroids_common.h"
+
+#if COMPILE_SOUND
+extern void sound_play(int,int);
+#endif
 
 int LoadFileBitmap(char* path, uint8_t* target, uint32_t size){
 	uint8_t header[54];
@@ -57,6 +62,11 @@ float vect_abs(vect2* a){
 	return sqrtf((a->x*a->x)+(a->y*a->y));	
 }
 
+//Returns the square of the length of a vector.
+float vect_abs_sqare(vect2* a){	
+	return (a->x*a->x)+(a->y*a->y);	
+}
+
 //Returns the unit vector of a.
 vect2 vect_unit(vect2* a){
 	vect2 t = *a;
@@ -92,6 +102,9 @@ float whatvect_abs(vect2* a, vect2* b)
 	t = sqrtf((a->x*a->x) + (b->x*b->x));
 	return t;
 }
+
+
+
 
 
 Ship::Ship(){
@@ -138,14 +151,26 @@ Ship::Ship(){
 	shield_enabled = true;
 	shield_auto_enable = true;
 
-	shield_max = 200;
-	health_max = 200;
 	shield = 200;
-	health = 200;
+	shield_max = 200;	
+	shield_regen = 0.012f;	
+
+	health = 100;
+	health_max = 100;
+	health_regen = 0.0f;
+
+	energy = 50;
+	energy_max = 150;
+	energy_regen = 0.4f;
 
 	angular_momentum = 0;
 
 	alive = false;
+
+	anim_shield_washit = 0;
+
+	//Orientate
+	RotateDeg(0,ticks_normal);
 
 	//Generate texture
 	LoadFileTGA("bitmaps/ship_1.tga",bmpdata, TGA_SIZE_256);
@@ -153,20 +178,23 @@ Ship::Ship(){
 	glGenTextures(1, &textureid);
 	glBindTexture(GL_TEXTURE_2D, textureid);
 
+
+
 	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 256, 256, 0, GL_BGRA, GL_UNSIGNED_BYTE, bmpdata);
 
 	//Generate texture
-	LoadFileTGA("bitmaps/shieldbubble_edge.tga",shield_data, TGA_SIZE_256);
+	LoadFileTGA("bitmaps/shieldbubble.tga",shield_data[0], TGA_SIZE_256);
+	LoadFileTGA("bitmaps/shieldbubble_edge.tga",shield_data[1], TGA_SIZE_256);
 
-	glGenTextures(1, &shieldtext);
-	glBindTexture(GL_TEXTURE_2D, shieldtext);
+	glGenTextures(2, &shieldtext[0]);
+	glBindTexture(GL_TEXTURE_2D, shieldtext[0]);
 
 	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 256, 256, 0, GL_BGRA, GL_UNSIGNED_BYTE, shield_data);	
 
 	glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR); // Linear Filtering
     glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR); // Linear Filtering
 	
-	RotateDeg(0,ticks_normal);
+	
 
 	//Engine texture
 	LoadFileTGA("bitmaps/flame1.bmp",engine_data, BMP_SIZE_256);
@@ -179,7 +207,7 @@ Ship::Ship(){
 	glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR); // Linear Filtering
     glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR); // Linear Filtering
 	
-	RotateDeg(0,ticks_normal);
+	
 
 }
 
@@ -192,6 +220,22 @@ void Ship::DoDamage(float damage){
 
 	if (shield_enabled){
 		if (shield > 0){
+			//Play animation.
+			anim_shield_washit = 1;
+			anim_shield_washit_fact = 1/(damage*20);
+			if (anim_shield_washit_fact < 0.001f){
+				anim_shield_washit_fact = 0.001f;
+			}
+
+			//Play sound
+			#if COMPILE_SOUND
+			float level = 5*damage;
+			if (level > 40){
+				level = 40;
+			}
+			sound_play(SND_SHIELD,level);
+			#endif
+
 			shield -= damage_remaining;
 			damage_remaining = 0;
 			if (shield < 0){
@@ -217,8 +261,15 @@ void Ship::Fire(float impulse){
 	//Update these, just to be sure.
 	weapon.position = position;
 	weapon.orient = orient;
-	//Fire weapon.
-	weapon.Fire(velocity,6);
+
+	if (energy > impulse){
+		energy-= impulse;
+		//Fire weapon.
+		weapon.Fire(velocity,impulse);
+		#if COMPILE_SOUND
+		sound_play(SND_WEAPON,50);
+		#endif
+	}	
 }
 
 void Ship::Render(vect2 relative, bool center){
@@ -226,20 +277,14 @@ void Ship::Render(vect2 relative, bool center){
 		return;
 	}
 
-	float i = -1;
-	float j = -1;
 
 	glPushMatrix();
-	
-	//glTranslatef(0,0,-5.0f);
-
+		
 	if (center){
 		glTranslatef(-relative.x,-relative.y,zoom);		
 	}else{
 		glTranslatef(position.x-relative.x,position.y-relative.y,zoom);
-	}
-	
-	
+	}	
 	
 		
 	glRotatef(angledeg,0.f,0.f,1.0f);
@@ -253,9 +298,9 @@ void Ship::Render(vect2 relative, bool center){
     glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR); // Linear Filtering
 	
 	glEnable(GL_TEXTURE_2D);							// Enable Texture Mapping
-	glShadeModel(GL_SMOOTH);	
+		
 	glBlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);					// Set The Blending Function For Translucency
-	glEnable(GL_BLEND);
+	
 	
 	glDisable(GL_DEPTH_TEST);
 
@@ -334,19 +379,19 @@ void Ship::Render(vect2 relative, bool center){
 	//Render shields.
 	if (shield_enabled){
 
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 256, 256, 0, GL_BGRA, GL_UNSIGNED_BYTE, shield_data);	
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 256, 256, 0, GL_BGRA, GL_UNSIGNED_BYTE, &shield_data[1]);	
 		glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR); // Linear Filtering
 	    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR); // Linear Filtering
 
 		glEnable(GL_TEXTURE_2D);
-		glShadeModel(GL_SMOOTH);
+		
 		//Translucent blending.
 		glBlendFunc(GL_SRC_ALPHA, GL_ONE);
-		glEnable(GL_BLEND);
+		
 		
 		glDisable(GL_DEPTH_TEST);
 
-		glBindTexture(GL_TEXTURE_2D, shieldtext);
+		glBindTexture(GL_TEXTURE_2D, shieldtext[1]);
 		
 		//Animate.
 		float sa = rand()%360;
@@ -366,6 +411,30 @@ void Ship::Render(vect2 relative, bool center){
 			 glTexCoord2f(0, 1.0);
 			 glVertex3f(-1, 1.0, -0.0f);
 		glEnd();
+
+		//Load bubble
+		glBindTexture(GL_TEXTURE_2D, shieldtext[0]);
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 256, 256, 0, GL_BGRA, GL_UNSIGNED_BYTE, shield_data[0]);	
+		glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR);
+	    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR);
+		
+		//Draw shields.
+		if (anim_shield_washit == 0){
+			glColor4f(1,1,1,0.05*(shield/shield_max));
+		}else{
+			glColor4f(1,1,1,0.5*(shield/shield_max)*anim_shield_washit);
+		}
+		glBegin(GL_QUADS);
+			 glTexCoord2f(0,0);
+			 glVertex3f(-1, -1, -0.0f);
+			 glTexCoord2f(1.0, 0);
+			 glVertex3f(1.0, -1, -0.0f);
+			 glTexCoord2f(1.0, 1.0);
+			 glVertex3f(1.0, 1.0, -0.0f);
+			 glTexCoord2f(0, 1.0);
+			 glVertex3f(-1, 1.0, -0.0f);
+		glEnd();
+
 	}
 
 	
@@ -381,6 +450,11 @@ void Ship::Render(vect2 relative, bool center){
 
 
 void Ship::EnableShield(bool enable){
+	if (enable){
+		//Play hit animation.
+		anim_shield_washit = 1;
+		anim_shield_washit_fact = 0.002f;
+	}
 	shield_enabled = enable;
 	shield_auto_enable = enable;
 }
@@ -401,14 +475,27 @@ void Ship::RotateDeg(float angle, float ticks){
 void Ship::RotateImpulse(float impulse, float ticks){
 	float dt = ticks/ticks_normal;
 
+	energy -= abs(impulse)*dt*.4f;
+	if (energy < 0){
+		impulse = impulse+energy;
+		energy = 0;
+	}
+
 	angular_momentum += impulse*dt;	
 }
 
-void Ship::Move(float value, float ticks){
-	
+void Ship::Move(float value, float ticks){	
 	float dt = ticks/ticks_normal;
-	//Add to the ships inertia.
-	
+	float ecost = abs(value)*dt;	
+
+	energy -= ecost;
+	if (energy < 0){
+		float erem = abs(energy)/ecost;
+		value = value*erem;
+		energy = 0;
+	}
+
+	//Add to the ships inertia.	
 	accel.x += orient.x*value*dt/5;
 	accel.y += orient.y*value*dt/5;
 
@@ -417,11 +504,18 @@ void Ship::Move(float value, float ticks){
 	//printf("Accel.abs: %8.3f\n",vect_abs(&accel));
 }
 
-void Ship::Strafe(float value, float ticks){
-	
+void Ship::Strafe(float value, float ticks){	
 	float dt = ticks/ticks_normal;
-	//Add to the ships inertia.
+	float ecost = abs(value)*dt;	
+	energy -= ecost;
 	
+	if (energy < 0){
+		float erem = abs(energy)/ecost;
+		value = value * erem;
+		energy = 0;
+	}
+
+	//Add to the ships inertia.	
 	accel.x += orient.y*value*dt/5;
 	accel.y += -orient.x*value*dt/5;
 
@@ -432,13 +526,26 @@ void Ship::Strafe(float value, float ticks){
 
 void Ship::Brake(float value, float ticks){
 	float dt = ticks/ticks_normal;
-	vect2 t = vect_unit(&velocity);
+	float ecost = abs(value)*dt;
+	
+	energy -= value*dt;
+	if (energy < 0){
+		float erem = abs(energy)/ecost;
+		value = value * erem;
+		energy = 0;
+	}
 
 	//Add to the ships inertia.
 	accel.x -= orient.x*value*dt/5;
 	accel.y -= orient.y*value*dt/5;
+	/*
 	accel.x -= (t.x*dt)/100.0f;
 	accel.y -= (t.y*dt)/100.0f;
+	*/
+}
+
+void Ship::Print(){
+	printf("Ship Texture: %i\n",textureid);
 }
 
 
@@ -497,6 +604,67 @@ void Player::ParseData(uint8_t* data){
 	
 }
 
+int Asteroid::ParseData(uint8_t* data){
+	int len = 0;
+
+	memcpy(&position,data,sizeof(position));
+	len += sizeof(position);
+	data+= sizeof(position);
+
+	memcpy(&momentum,data,sizeof(momentum));
+	len += sizeof(momentum);
+	data+= sizeof(momentum);
+
+	memcpy(&rotation,data,sizeof(rotation));
+	len += sizeof(rotation);
+	data+= sizeof(rotation);
+
+	memcpy(&mass,data,sizeof(mass));
+	len += sizeof(mass);
+	data+= sizeof(mass);
+
+	memcpy(&size,data,sizeof(size));
+	len += sizeof(size);
+	data+= sizeof(size);
+
+	memcpy(&alive,data,sizeof(alive));
+	len += sizeof(alive);
+	data+= sizeof(alive);
+	
+	return len;
+}
+
+
+int Asteroid::SendData(uint8_t* data){
+	int len = 0;
+
+	memcpy(data,&position,sizeof(position));
+	len += sizeof(position);
+	data+= sizeof(position);
+
+	memcpy(data,&momentum,sizeof(momentum));
+	len += sizeof(momentum);
+	data+= sizeof(momentum);
+
+	memcpy(data,&rotation,sizeof(rotation));
+	len += sizeof(rotation);
+	data+= sizeof(rotation);
+
+	memcpy(data,&mass,sizeof(mass));
+	len += sizeof(mass);
+	data+= sizeof(mass);
+
+	memcpy(data,&size,sizeof(size));
+	len += sizeof(size);
+	data+= sizeof(size);
+
+	memcpy(data,&alive,sizeof(alive));
+	len += sizeof(alive);
+	data+= sizeof(alive);
+	
+	return len;
+}
+
 int Player::SendData(uint8_t* data){
 	int len = 0;
 	
@@ -547,6 +715,7 @@ Backdrop::Backdrop(){
 
 	glGenTextures(1, &textureid);
 	glBindTexture(GL_TEXTURE_2D, textureid);
+	
 
 	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, 128, 128, 0, GL_BGR, GL_UNSIGNED_BYTE, bmpdata);
 
@@ -559,6 +728,10 @@ Backdrop::Backdrop(){
 
 Backdrop::~Backdrop(){
 
+}
+
+void Backdrop::Print(){
+	printf("Star Texture: %i\n",textureid);
 }
 
 void Backdrop::Generate(void){
@@ -603,38 +776,22 @@ void Backdrop::Move(vect2 value){
 
 void Backdrop::Render(vect2 relative){
 	glPushMatrix();
-	//glTranslatef(-1,-1,-5.0f);
 	
 	glScalef(0.03f,0.03f,1);
-	
-
 	glTranslatef(-relative.x,-relative.y,-4.5f);
 
-	//glRotatef(angledeg,0.f,0.f,1.0f);
-
-	/*
-	glBegin(GL_TRIANGLES);
-	for (int i =0;i<700;i++){		
-		glColor4f(1,1,1,0.7f);
-		glVertex3f(-1+star[i].x,-1+star[i].y,star[i].z);
-		glVertex3f(0+star[i].x,1+star[i].y,star[i].z);
-		glVertex3f(1+star[i].x,-1+star[i].y,star[i].z);
-		
-	}
-	glEnd();	
-	*/
-
+	//Star texture.
 	glBindTexture(GL_TEXTURE_2D, textureid);
+	
 	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, 128, 128, 0, GL_BGR, GL_UNSIGNED_BYTE, bmpdata);
-
 	
 	glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR); // Linear Filtering
     glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR); // Linear Filtering
 	
 	glEnable(GL_TEXTURE_2D);							// Enable Texture Mapping
-	glShadeModel(GL_SMOOTH);	
+		
 	//glBlendFunc(GL_SRC_ALPHA,GL_ONE);					// Set The Blending Function For Translucency
-	glEnable(GL_BLEND);
+	
 	glEnable(GL_DEPTH_TEST);
 	
 	glDisable(GL_DEPTH_TEST);
@@ -759,10 +916,12 @@ Bullet::Bullet(){
 	velocity.x = 0;
 	velocity.y = 0;
 
+	fade = 1;
+
 	//Generate texture
 	LoadFileBitmap("bitmaps/star.bmp",bmpdata, BMP_SIZE_128);
 
-	glGenTextures(1, &textureid);
+	glGenTextures(1, &textureid);	
 	glBindTexture(GL_TEXTURE_2D, textureid);
 
 	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, 128, 128, 0, GL_BGR, GL_UNSIGNED_BYTE, bmpdata);
@@ -782,6 +941,11 @@ void Bullet::DoPhysics(float ticks){
 	position.x += dt*velocity.x*0.04f;
 	position.y += dt*velocity.y*0.04f;
 
+	fade -= (dt * 0.01f);
+	if (fade < 0){
+		alive = false;
+	}
+
 }
 
 void Bullet::SetPosition(vect2 pos){
@@ -798,6 +962,7 @@ void Weapon::Render(vect2 relative){
 
 void Bullet::Fire(vect2 vel, vect2 pos, vect2 ori, float impulse){
 	alive = true;
+	fade = 1;
 	position = pos;
 	orient = ori;
 
@@ -812,21 +977,6 @@ void Bullet::Render(vect2 relative){
 		return;
 	glPushMatrix();
 	glTranslatef(position.x-relative.x,position.y-relative.y,0);
-	
-
-	/*
-	glScalef(0.2f,0.2f,1);
-	 	glRotatef(rand()%360,0.f,0.f,1.0f);
-		glBegin(GL_TRIANGLES);
-		glColor4f(1,1,0,0.5f);
-		glVertex3f(-1,-1,0.0f);
-		glVertex3f(0,1,0.0f);
-		glVertex3f(1,-1,0.0f);
-		
-		glEnd();	
-	*/
-
-
 
 	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, 128, 128, 0, GL_BGR, GL_UNSIGNED_BYTE, bmpdata);
 
@@ -835,9 +985,9 @@ void Bullet::Render(vect2 relative){
     glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR); // Linear Filtering
 	
 	glEnable(GL_TEXTURE_2D);							// Enable Texture Mapping
-	glShadeModel(GL_SMOOTH);	
+		
 	glBlendFunc(GL_SRC_ALPHA,GL_ONE);					// Set The Blending Function For Translucency
-	glEnable(GL_BLEND);
+	
 	
 	glDisable(GL_DEPTH_TEST);
 
@@ -851,7 +1001,7 @@ void Bullet::Render(vect2 relative){
 	glRotatef(rand()%360,0.f,0.f,1.0f);
 
 	glBegin(GL_QUADS);		
-		glColor4f(1,1,1,0.5f);	
+		glColor4f(1,1,1,0.5f*fade);	
 	
 		glTexCoord2f(0,0);
 		glVertex3f(-1, -1, 0);
@@ -866,7 +1016,7 @@ void Bullet::Render(vect2 relative){
 	glScalef(0.5f,0.5f,1);
 
 	glBegin(GL_QUADS);		
-		glColor4f(1,1,0,0.5f);	
+		glColor4f(1,1,0,0.5f*fade);	
 	
 		glTexCoord2f(0,0);
 		glVertex3f(-1, -1, 0);
@@ -877,7 +1027,7 @@ void Bullet::Render(vect2 relative){
 		glTexCoord2f(0, 1.0);
 		glVertex3f(-1, 1.0, 0);
 	glEnd();
-	glScalef(0.5f,0.25f,1);
+	glScalef(0.5f,0.25f,1*fade);
 	glRotatef(rand()%360,0.f,0.f,1.0f);
 	glColor4f(1,0,0,0.6f);	
 	glBegin(GL_QUADS);
@@ -1027,10 +1177,10 @@ void Crate::PreRender(){
 	glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR); // Linear Filtering*/
 
 	glEnable(GL_TEXTURE_2D);							// Enable Texture Mapping
-	glShadeModel(GL_SMOOTH);	
+		
 	
 	glBlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);
-	glEnable(GL_BLEND);
+	
 
 	glDisable(GL_DEPTH_TEST);
 }
@@ -1189,10 +1339,10 @@ void Asteroid::PreRender(){
 	glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR); // Linear Filtering
 
 	glEnable(GL_TEXTURE_2D);							// Enable Texture Mapping
-	glShadeModel(GL_SMOOTH);	
+		
 	
 	glBlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);
-	glEnable(GL_BLEND);
+	
 
 	glDisable(GL_DEPTH_TEST);
 }
@@ -1248,8 +1398,8 @@ Asteroid::Asteroid(){
 
 	health = 20 + rand()%20;
 
-	momentum.x = (rand()%100/50.0f -1)*3.0f;
-	momentum.y = (rand()%100/50.0f -1)*3.0f;
+	momentum.x = (rand()%100/50.0f -1)*4.0f;
+	momentum.y = (rand()%100/50.0f -1)*4.0f;
 
 	size = ((rand()%10000) + 2500)/5000;
 
@@ -1266,6 +1416,10 @@ Asteroid::Asteroid(){
 Asteroid::~Asteroid(){
 
 }
+
+
+
+
 
 void Asteroid::Render(vect2 relative){	
 	if (alive){
@@ -1338,7 +1492,7 @@ void Ship::DoPhysics(float ticks){
 	//inertia.x = friction.x;
 	//inertia.y = friction.y;
 
-	RotateDeg(angular_momentum/10.0f,ticks);
+	RotateDeg(angular_momentum,ticks);
 
 	angular_momentum = angular_momentum/(powf(1.1f,dt));
 
@@ -1347,21 +1501,69 @@ void Ship::DoPhysics(float ticks){
 
 	//Recharge the shields at a fixed rate.
 	if (shield_enabled == false){		
-		shield += ((dt*0.5)/10.0f);
+		shield += (dt*shield_regen);
 		if (shield_auto_enable){
 			if ((shield/shield_max) > 0.5f){
 				shield_enabled = true;
 			}
 		}
 	}else if (shield_enabled == true){
-		shield += ((dt*0.125)/10.0f);
+		shield += (dt*0.25*shield_regen);
 	}
 	if (shield > shield_max){
 		shield = shield_max;
 	}
 
+	//Recharge Health
+	health += (dt*health_regen);		
+	if (health > health_max){
+		health = health_max;
+	}
+
+	//Recharge energy at a fixed rate.
+	energy += (dt*energy_regen);
+	if (energy > energy_max){
+		energy = energy_max;
+	}
+
+	//Shield hit animation
+	anim_shield_washit -= anim_shield_washit_fact;
+	if (anim_shield_washit < 0){
+		anim_shield_washit = 0;
+	}
+
 	//printf("Player: %6.3f %6.3f %6.3f %6.3f\n",angledeg,anglerad,accel.x,accel.y);
 }
+
+
+//Regen the thields by using up energy.
+void Ship::RegenShields(float value, float ticks){	
+	float dt = ticks/ticks_normal;
+	float rate = (dt*shield_regen*value);
+	energy -= rate;
+	if (energy < 0){
+		rate += energy;
+		energy = 0;
+	}
+	rate /= 4;
+
+
+	if (shield_enabled == false){		
+		shield += rate;
+		if (shield_auto_enable){
+			if ((shield/shield_max) > 0.5f){
+				shield_enabled = true;
+			}
+		}
+	}else if (shield_enabled == true){
+		shield += rate/4;
+	}
+	if (shield > shield_max){
+		shield = shield_max;
+	}
+
+}
+
 
 void Asteroid::DoPhysics(float ticks){
 	if (!alive){
@@ -1382,7 +1584,7 @@ void Asteroid::DoPhysics(float ticks){
 	velocity.x = momentum.x / mass;
 	velocity.y = momentum.y / mass;
 
-	if (vect_abs(&velocity) > 10){
+	if (vect_abs_sqare(&velocity) > 100){
 		momentum.x = momentum.x / 2;
 		momentum.y = momentum.y / 2;
 	}
@@ -1479,6 +1681,11 @@ void Asteroid::Destroy(){
 	if (num_smoke > 96){
 		num_smoke = 96;
 	}
+
+	//Play sound
+	#if COMPILE_SOUND
+	sound_play(SND_IMPACT,10.0f);
+	#endif
 
 	int total_decl = num_smoke + num_fire;
 	
@@ -1619,10 +1826,7 @@ void Smoke::PreRender(void){
 	glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR); // Linear Filtering
 
 	glEnable(GL_TEXTURE_2D);							// Enable Texture Mapping
-	glShadeModel(GL_SMOOTH);	
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE);
-	glEnable(GL_BLEND);
-
 	glDisable(GL_DEPTH_TEST);
 }
 

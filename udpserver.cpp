@@ -164,6 +164,7 @@ int udpclient::send(char* data, int len){
 		}
 		printf("\n");
 		*/
+		closesocket(client_socket);
 		return len;
     }
 	return 0;

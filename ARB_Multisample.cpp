@@ -60,6 +60,7 @@ bool WGLisExtensionSupported(const char *extension)
 	}
 }
 
+
 // InitMultisample: Used To Query The Multisample Frequencies
 bool InitMultisample(HINSTANCE hInstance,HWND hWnd,PIXELFORMATDESCRIPTOR pfd)
 {  
@@ -69,6 +70,20 @@ bool InitMultisample(HINSTANCE hInstance,HWND hWnd,PIXELFORMATDESCRIPTOR pfd)
 		arbMultisampleSupported=false;
 		return false;
 	}
+
+	//Infant
+
+	 // See If The String Exists In WGL!
+	if (!WGLisExtensionSupported("WGL_EXT_swap_control"))
+	{
+		bool swappy=false;
+		//return false;
+	}else{		
+		PFNWGLSWAPINTERVALEXTPROC wglSwapIntervalEXT = (PFNWGLSWAPINTERVALEXTPROC)wglGetProcAddress("wglSwapIntervalEXT");
+		wglSwapIntervalEXT(0);
+	}
+
+	//End infant
 
 	// Get Our Pixel Format
 	PFNWGLCHOOSEPIXELFORMATARBPROC wglChoosePixelFormatARB = (PFNWGLCHOOSEPIXELFORMATARBPROC)wglGetProcAddress("wglChoosePixelFormatARB");	

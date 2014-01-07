@@ -1,8 +1,6 @@
 #include "NetworkManager.h"
 
-#define PACK_HEAD	0x35
-#define PACK_GAME	0x77
-#define PACK_ID		0x88
+
 
 udpserver data_server;
 udpclient data_client;
@@ -50,6 +48,9 @@ int NetMan::get_playerbyid(uint32_t id){
 int NetMan::num_players;
 Player* NetMan::players;
 
+int NetMan::num_asteroids;
+Asteroid* NetMan::asteroids;
+
 uint8_t NetMan::unique_id[8];
 uint32_t NetMan::unique_id32;
 
@@ -62,7 +63,7 @@ NetMan::NetMan(){
 	port_in = 5000;
 	port_out = 5000;
 
-	
+	last_ast = 0;
 }
 
 
@@ -70,9 +71,12 @@ NetMan::~NetMan(){
 	
 
 }
-void NetMan::init(Player* _players, int num){
+void NetMan::init(Player* _players, int nump, Asteroid* _asteroids, int numa){
 	players = _players;
-	num_players = num;
+	num_players = nump;
+
+	asteroids = _asteroids;
+	num_asteroids = numa;
 
 	//Generate unique id;
 	for(uint8_t i=0;i<8;i++){
@@ -81,6 +85,8 @@ void NetMan::init(Player* _players, int num){
 
 	
 	memcpy(&unique_id32,unique_id,4);
+
+
 }
 
 void NetMan::send(){		
@@ -97,7 +103,63 @@ void NetMan::send(){
 	for(int i =0;i<10;i++){
 		//Send data to each alive player except self.
 		if ((playerinfo[i].taken)&& (playerinfo[i].unique_id != unique_id32)){
-			printf("Sending data to player %08X\n",playerinfo[i].unique_id);
+			//printf("Sending data to player %08X\n",playerinfo[i].unique_id);
+			data_client.open(playerinfo[i].port);
+			data_client.send((char*)data_client.data,len);
+		}
+	}
+
+	//And that ...
+	sendAsteroids();
+}
+
+
+void NetMan::sendAsteroids(){		
+	//Prepare header
+	data_client.data[0] = PACK_HEAD;
+	data_client.data[1] = PACK_AST;
+
+	//Number of asteroids in this data packet.
+	int num_ast_inpack = 20;
+	if ((num_asteroids-last_ast) == 0){
+		//Start at the beginning.
+		last_ast = 0;		
+	}
+	if ((last_ast + num_ast_inpack)> num_asteroids){
+		num_ast_inpack = num_asteroids - last_ast;
+	}
+
+	
+
+
+	int len = 2;
+	memcpy(&data_client.data[len],&unique_id32,sizeof(unique_id32));
+	len += sizeof(unique_id32);
+
+	//Send number of asteroids, and the start index of this packet.
+	memcpy(&data_client.data[len],&num_asteroids,sizeof(num_asteroids));
+	len += sizeof(num_asteroids);
+
+	//Starting asteroid in this packet.
+	memcpy(&data_client.data[len],&last_ast,sizeof(last_ast));
+	len += sizeof(last_ast);
+
+	
+
+	memcpy(&data_client.data[len],&num_ast_inpack,sizeof(num_ast_inpack));
+	len += sizeof(num_ast_inpack);
+
+	//Add data.
+	for (int i=last_ast;i<(last_ast+num_ast_inpack);i++){	
+		len += asteroids[i].SendData((uint8_t*)&data_client.data[len]);
+	}
+
+	last_ast += num_ast_inpack;
+
+	for(int i =0;i<10;i++){
+		//Send data to each alive player except self.
+		if ((playerinfo[i].taken)&& (playerinfo[i].unique_id != unique_id32)){
+			//printf("Sending asteroid data to player %08X\n",playerinfo[i].unique_id);
 			data_client.open(playerinfo[i].port);
 			data_client.send((char*)data_client.data,len);
 		}
@@ -107,7 +169,7 @@ void NetMan::send(){
 void NetMan::receive(){
 	int len;
 	while(1){
-		len = data_server.receive(256,10);
+		len = data_server.receive(1024,10);
 		if (len ==0){
 			break;
 		}
@@ -173,8 +235,42 @@ void NetMan::handle_data(uint8_t* data, int len){
 				if (i == -1){
 					return;
 				}
-				printf("Updating player[%i] ID=%04X\n",i,recid);
+				//printf("Updating player[%i] ID=%04X\n",i,recid);
 				players[i].ParseData(&data[6]);	
+			}
+		}else if (data[1]==PACK_AST){
+			//Make sure it's not my id:
+			uint32_t recid;
+			memcpy(&recid,&data[2],4);
+			if ((recid != unique_id32)&&(recid>unique_id32)){				
+				int i = get_playerbyid(recid);
+				if (i == -1){
+					return;
+				}
+				printf("Updating asteroids from [%i] ID=%04X\n",i,recid);
+				//Set asteroids.
+
+				int rec_n;
+				int rec_start;
+				int rec_cnt;
+
+				int len = 6;
+				//Get number of asteroids, and the start index of this packet.
+				memcpy(&rec_n,&data[len],sizeof(rec_n));
+				len += sizeof(rec_n);
+
+				//Starting asteroid in this packet.
+				memcpy(&rec_start,&data[len],sizeof(rec_start));
+				len += sizeof(rec_start);
+
+				//Number of asteroids in this data packet.				
+				memcpy(&rec_cnt,&data[len],sizeof(rec_cnt));
+				len += sizeof(rec_cnt);
+
+				//Get data and parse it.
+				for (int i=rec_start;i<(rec_start+rec_cnt);i++){	
+					len += asteroids[i].ParseData(&data[len]);
+				}
 			}
 		}
 	}

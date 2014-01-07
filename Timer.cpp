@@ -15,6 +15,32 @@
 #include "Timer.h"
 #include <stdlib.h>
 
+
+////////////////////////////////C-Style counters/////////////////////////////
+void counter_s_clear(counter_s* t){
+	t->average = 0;
+	t->cnt = 0;
+	t->sum = 0;
+	t->last = 0;
+}
+
+//Keep last.
+void counter_s_reset(counter_s* t){
+	t->last = t->average;
+	t->average = 0;
+	t->cnt = 0;
+	t->sum = 0;
+}
+
+
+void counter_s_add(counter_s* t, float val){
+	t->sum += val;	
+	t->cnt++;
+	t->average = (double)t->sum/(double)t->cnt;
+}
+
+
+
 ///////////////////////////////////////////////////////////////////////////////
 // constructor
 ///////////////////////////////////////////////////////////////////////////////

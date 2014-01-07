@@ -14,9 +14,6 @@
 #define PI 3.14159265f
 
 
-
-
-
 /*
 Player has a ship.
 */
@@ -72,9 +69,10 @@ public:
 	float health_max;
 
 	float size;
+	float mass;
 protected:
 	
-	float mass;
+	
 
 
 	//Should be able to make smoke.
@@ -145,6 +143,8 @@ public:
 
 	void Render(vect2);
 	
+	int SendData(uint8_t* data);
+	int ParseData(uint8_t* data);
 
 	void DoPhysics(float ticks);
 
@@ -186,6 +186,7 @@ public:
 	vect2 position;
 	vect2 velocity;
 	bool alive;
+	float fade;
 private:
 	
 	GLuint textureid;
@@ -220,6 +221,8 @@ public:
 	void Render(vect2);
 	void Generate();
 	void Move(vect2);
+
+	void Print();
 	vect2 position;
 private:
 	GLuint textureid;
@@ -244,9 +247,11 @@ public:
 	void Fire(float impulse);
 	void LoadShip(char* name);
 	void EnableShield(bool);
+	void RegenShields(float value,float ticks);
 
 	void DoDamage(float value);
 
+	void Print();
 
 	vect2 velocity;
 	vect2 momentum;
@@ -264,8 +269,16 @@ public:
 
 	float health;
 	float health_max;
+	float health_regen;
+
 	float shield;
 	float shield_max;
+	float shield_regen;
+
+
+	float energy;
+	float energy_max;
+	float energy_regen;
 
 	bool alive;
 private:
@@ -273,12 +286,16 @@ private:
 
 	bool shield_auto_enable;
 
+	float anim_shield_washit;
+	float anim_shield_washit_fact;
+
 	vect2 force;
 	GLuint textureid;
 	uint8_t bmpdata[TGA_SIZE_256];
 
-	GLuint shieldtext;
-	uint8_t shield_data[TGA_SIZE_256];
+
+	GLuint shieldtext[2];
+	uint8_t shield_data[2][TGA_SIZE_256];
 
 	GLuint enginetext;
 	uint8_t engine_data[BMP_SIZE_256];

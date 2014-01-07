@@ -17,14 +17,23 @@
 #include "ARB_MULTISAMPLE.h"
 #include "NeHeGL.h"		
 
+#include <SFML/Audio.hpp>
+
+#include <cstdlib>
+#include <pthread.h>
 
 
+//#define SFML_STATIC 
 
 // ROACH
 #include "arb_multisample.h"
 bool domulti = true;
-bool doangle = true;
+
 bool dodynamiczoom = true;
+
+bool docollision = true;
+bool dosleep = false;
+
 // ENDROACH
 
 #include "Player.h"
@@ -32,11 +41,37 @@ bool dodynamiczoom = true;
 #include "gl_font.h"
 #include "Thread.h"
 #include "NetworkManager.h"
+#include "asteroids_common.h"
 
 extern GLFont g_font;
 
+
+#if COMPILE_SOUND
+void sound_init(void);
+void sound_play(int,int);
+
+int num_diff_sounds = 4;
+int max_sounds = 10;
+
+sf::SoundBuffer buffer[4];
+sf::Sound sound[4][10];
+int sound_counter[4];
+
+#define ASTSND_IMPACT_PATH	"sounds/die.wav"
+#define ASTSND_SHIELD_HITS_PATH	"sounds/shield_short.wav"
+#define ASTSND_SHIELD_HITL_PATH	"sounds/shield_long.wav"
+#define ASTSND_WEAPON_PATH	"sounds/weapon1.wav"
+#endif
+
+
 #pragma comment( lib, "opengl32.lib" )							// Search For OpenGL32.lib While Linking
 #pragma comment( lib, "glu32.lib" )								// Search For GLu32.lib While Linking
+#pragma comment( lib, "glew32s.lib" )
+#pragma comment( lib, "sfml-audio.lib" )						// SFML audio
+#pragma comment( lib, "pthreadVCE2.lib" )					
+
+
+
 
 #ifndef CDS_FULLSCREEN											// CDS_FULLSCREEN Is Not Defined By Some
 #define CDS_FULLSCREEN 4										// Compilers. By Defining It This Way,
@@ -48,17 +83,21 @@ long screen_h;
 GL_Window*	g_window;
 Keys*		g_keys;
 
-Timer game_timer;
+void handle_input(float);
+
+bool g_enableVerticalSync = false;
+void    EnableVerticalSync(bool enableVerticalSync);
+
 
 int num_players = 10;
 Player player[10];
 Backdrop background;
 
-int num_asteroids = 500;
-Asteroid asteroid[500];
+int num_asteroids = 1500;
+Asteroid asteroid[1500];
 
-int num_smoke = 800;
-Smoke smoke[800];
+int num_smoke = 100;
+Smoke smoke[100];
 
 int num_crates = 50;
 Crate crate[50];
@@ -68,14 +107,14 @@ float angle= 0.0f;
 
 float zoom = -5.0f;
 
-
+int alive_asteroids = 0;
 bool render_done = true;
 
 BOOL DestroyWindowGL (GL_Window* window);
 BOOL CreateWindowGL (GL_Window* window);
 //ENDROACH
 
-//Thread thread_physics;
+Thread thread_physics;
 
 #define WM_TOGGLEFULLSCREEN (WM_USER+1)									// Application Define Message For Toggling
 
@@ -84,8 +123,9 @@ static BOOL g_createFullScreen;											// If TRUE, Then Create Fullscreen
 
 
 //Network
+#if COMPILE_NETWORK
 NetMan net_man;
-
+#endif
 
 //Timing.
 float ticks = 0;
@@ -93,10 +133,19 @@ float ticks_alive = 0;		//Timing for Network alive message.
 float ticks_netupdate = 0;	//Timing for Network game update.
 float t_target = 20000;
 
-float time_physics;
+//Counters
+counter_s cnt_physics;
+counter_s cnt_render;
+counter_s cnt_fps;
+counter_s cnt_idle;
+counter_s cnt_loop;
+//Timers.
+Timer timer_loop;
+Timer timer_render;
+Timer timer_fps;
+Timer timer_physics;
+Timer timer_idle;
 
-float last_time_off;
-float average_time_off;
 
 
 /*
@@ -165,6 +214,24 @@ BOOL ChangeScreenResolution (int width, int height, int bitsPerPixel)	// Change 
 	return TRUE;														// Display Change Was Successful, Return True
 }
 
+
+void EnableVerticalSync(bool enableVerticalSync)
+{
+    // WGL_EXT_swap_control.
+
+    typedef BOOL (WINAPI * PFNWGLSWAPINTERVALEXTPROC)(GLint);
+
+    static PFNWGLSWAPINTERVALEXTPROC wglSwapIntervalEXT =
+        reinterpret_cast<PFNWGLSWAPINTERVALEXTPROC>(
+        wglGetProcAddress("wglSwapIntervalEXT"));
+
+    if (wglSwapIntervalEXT)
+    {
+        wglSwapIntervalEXT(enableVerticalSync ? 1 : 0);
+        g_enableVerticalSync = enableVerticalSync;
+    }
+}
+
 // Get the horizontal and vertical screen sizes in pixel
 void GetDesktopResolution(int& horizontal, int& vertical)
 {
@@ -207,19 +274,7 @@ BOOL CreateWindowGL (GL_Window* window)									// This Code Creates Our OpenGL 
 		0, 0, 0															// Layer Masks Ignored
 	};
 
-
-	AllocConsole();
-	freopen("CONIN$", "r",stdin);
-	freopen("CONOUT$", "w",stdout);
-	//freopen("CONOUT$", "w",stderr);
-
-	
-
-	/*
-	hTimerQueue = CreateTimerQueue();
-	int arg = 123;
-	CreateTimerQueueTimer( &hTimer, hTimerQueue, (WAITORTIMERCALLBACK)TimerRoutine, &arg , 100, 30, 0);
-	*/
+		
 	RECT windowRect = {0, 0, window->init.width, window->init.height};	// Define Our Window Coordinates
 
 	GLuint PixelFormat;													// Will Hold The Selected Pixel Format
@@ -434,7 +489,7 @@ LRESULT CALLBACK WindowProc (HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 		case WM_PAINT:
 			//We must call Begin and End Paint, otherwise this function will just get called forever.
 			BeginPaint(window->hWnd,&ps);
-			EndPaint(window->hWnd,&ps);		
+			EndPaint(window->hWnd,&ps);	
 			
 		return 0;
 
@@ -478,6 +533,8 @@ LRESULT CALLBACK WindowProc (HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 			}
 		break;															// Break
 
+																//
+
 		case WM_KEYUP:													// Update Keyboard Buffers For Keys Released
 			if ((wParam >= 0) && (wParam <= 255))						// Is Key (wParam) In A Valid Range?
 			{
@@ -516,13 +573,56 @@ BOOL RegisterWindowClass (Application* application)						// Register A Window Cl
 	return TRUE;														// Return True (Success)
 }
 
+void *PrintHello(void *threadid)
+{
+   long tid;
+   tid = (long)threadid;
+   printf ("Hello World! Thread ID %i\n",tid);
+   pthread_exit(NULL);
+   return 0;
+}
+
+void physics_loop(void){
+	while(1){
+		Update();
+	}
+}
+
+void *pt_physics_loop(void* thread_id){
+	while(1){
+		Update();
+	}
+}
 
 
+
+
+//This is run once, at the start of WinMain.
 void load(){
+	AllocConsole();
+	freopen("CONIN$", "r",stdin);
+	freopen("CONOUT$", "w",stdout);
+	//freopen("CONOUT$", "w",stderr);
+	//system("pause");
+	
+	/*
+	hTimerQueue = CreateTimerQueue();
+	int arg = 123;
+	CreateTimerQueueTimer( &hTimer, hTimerQueue, (WAITORTIMERCALLBACK)TimerRoutine, &arg , 100, 30, 0);
+	*/
+
 	srand (time(NULL));
+
 	
 
-	NetMan::init(player,num_players);	
+	#if COMPILE_SOUND
+	sound_init();
+	#endif
+	
+	#if COMPILE_NETWORK
+	NetMan::init(player,num_players,asteroid,num_asteroids);	
+	net_man.startup();
+	#endif
 
 	//Init everything.
 	Smoke::init();
@@ -548,33 +648,35 @@ void load(){
 
 	background.Generate();
 
+	//Create asteroids
+
 	vect2 rnd;
 	for (int i=0;i<num_asteroids;i++){
-		rnd.x = (rand()%500 - 250)/5.0f;
-		rnd.y = (rand()%500 - 250)/5.0f;
+		rnd.x = (rand()%500 - 250)/4.0f;
+		rnd.y = (rand()%500 - 250)/4.0f;
+
+		if (abs(rnd.x)<2){
+			rnd.x *=2;
+		}
+		if (abs(rnd.y)<2){
+			rnd.y *=2;
+		}
 		asteroid[i].SetPosition(rnd);
 	}
 
-	for (int i=num_asteroids;i>250;i--){
+	for (int i=num_asteroids;i>750;i--){
 		asteroid[i].alive = false;
 	}
 
 	for (int i=1;i<num_crates;i++){
 		crate[i].alive = false;
-	}
-
-	
+	}	
 }
 
-
-
-
-
-
+//This is run after the succesfull creating of a window.
 void startup(){	
 	BuildFont(g_window->hDC,g_window->hWnd);
-
-	net_man.startup();
+	EnableVerticalSync(false);	
 }
 
 // Program Entry (WinMain)
@@ -624,7 +726,17 @@ int WINAPI WinMain (HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLin
 	
 	//Setup thread:
 	//thread_physics.bind(physics_loop);
-	
+	pthread_t thread;
+	int rc = 1;
+
+	//Pthreads				
+	//int i = 5;
+	//rc = pthread_create(&thread,NULL,pt_physics_loop, (void *)i);
+	if (rc){
+		printf("Error:unable to create thread : %i\n",rc);         
+	}
+				
+
 
 	while (g_isProgramLooping)											// Loop Until WM_QUIT Is Received
 	{
@@ -632,6 +744,8 @@ int WINAPI WinMain (HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLin
 		window.init.isFullScreen = g_createFullScreen;					// Set Init Param Of Window Creation To Fullscreen?
 		if (CreateWindowGL (&window) == TRUE)							// Was Window Creation Successful?
 		{
+			
+
 			// At This Point We Should Have A Window That Is Setup To Render OpenGL
 			if (Initialize (&window, &keys) == FALSE)					// Call User Intialization
 			{
@@ -642,7 +756,7 @@ int WINAPI WinMain (HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLin
 			{	// Initialize was a success
 				
 				startup();
-				//thread_physics.start();
+				//thread_physics.start();				
 				
 				isMessagePumpActive = TRUE;								// Set isMessagePumpActive To TRUE
 				while (isMessagePumpActive == TRUE)						// While The Message Pump Is Active
@@ -659,6 +773,7 @@ int WINAPI WinMain (HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLin
 						{
 							isMessagePumpActive = FALSE;				// Terminate The Message Pump
 						}
+						
 					}
 					else												// If There Are No Messages
 					{
@@ -670,7 +785,8 @@ int WINAPI WinMain (HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLin
 						{
 							
 							Update();
-							Draw();									// Draw Our Scene
+							handle_input(cnt_fps.average);
+							Draw();										// Draw Our Scene							
 							//SwapBuffers(g_window->hDC);
 						}
 					}
@@ -679,6 +795,10 @@ int WINAPI WinMain (HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLin
 
 			// Application Is Finished
 			Deinitialize ();											// User Defined DeInitialization
+
+			//thread_physics.kill();
+
+			
 
 			DestroyWindowGL (&window);									// Destroy The Active Window
 		}
@@ -689,6 +809,8 @@ int WINAPI WinMain (HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLin
 			g_isProgramLooping = FALSE;									// Terminate The Loop
 		}
 	}																	// While (isProgramLooping)
+
+	//pthread_kill(thread,0);
 
 	UnregisterClass (application.className, application.hInstance);		// UnRegister Window Class
 	return 0;
@@ -751,47 +873,96 @@ void DynamicZoom(float tusec){
 	zoom += diff;	
 }
 
-void physics_loop(void){
-	while(1){
-		Update();
+
+
+#if COMPILE_SOUND
+void sound_init(void){
+	for (int i=0;i<max_sounds;i++){
+		if (!buffer[0].loadFromFile(ASTSND_WEAPON_PATH))
+			break;
+		sound[0][i].setBuffer(buffer[0]);
+		sound_counter[0] = 0;
 	}
+	
+	for (int i=0;i<max_sounds;i++){
+		if (!buffer[1].loadFromFile(ASTSND_IMPACT_PATH))
+			break;
+		sound[1][i].setBuffer(buffer[1]);
+		
+	}
+	sound_counter[1] = 0;
+
+	for (int i=0;i<max_sounds;i++){
+		if (!buffer[2].loadFromFile(ASTSND_SHIELD_HITS_PATH))
+			break;
+		sound[2][i].setBuffer(buffer[2]);
+		
+	}
+	sound_counter[2] = 0;
+	 
 }
 
 
 
-void Update(){	
-	float tusec = game_timer.getElapsedTimeInMicroSec();
-
-	//Keep track.
-	last_time_off = t_target - tusec;
-	
-	if (ticks > 200000){	
-		average_time_off += last_time_off;
-		average_time_off /= 2;	
-
+void sound_play(int i, int vol){	 
+	if (sound_counter[i] == max_sounds){
+		sound_counter[i] = 0;
 	}
-	
-
-	if (tusec > 50000){
-		tusec = 50000;
-	}else if (tusec < t_target){
-		usleep(t_target-tusec);
-		tusec = game_timer.getElapsedTimeInMicroSec();
-	}	
-
-	
-	game_timer.start();
+	sound[i][sound_counter[i]].setVolume(vol);
+	sound[i][sound_counter[i]].play();
+	sound_counter[i]++;
+}
+#endif
 
 
-	//printf("Msec: %i\n",milliseconds);
-	//if(g_keys->keyDown [VK_SPACE] == TRUE)
-		//domulti=!domulti;
 
-	if(g_keys->keyDown ['M'] == TRUE)
-		doangle=!doangle;
+void handle_input(float tusec){
 
-	if(g_keys->keyDown ['D'] == TRUE){
-		player[0].Print();
+	if(g_keys->keyDown ['M'] == TRUE){
+		if (g_keys->keydown_time['M'] > 0){
+			g_keys->keydown_time['M'] -=tusec;
+		}else{
+			domulti = !domulti;
+			g_keys->keydown_time['M'] = 100000;
+		}
+	}
+
+	if(g_keys->keyDown ['I'] == TRUE){
+		if (g_keys->keydown_time['I'] > 0){
+			g_keys->keydown_time['I'] -=tusec;
+		}else{
+			player[0].ship.Print();
+			background.Print();
+			g_keys->keydown_time['I'] = 100000;
+		}
+	}
+
+	g_keys->keydown_time['V'] -=tusec;
+	if(g_keys->keyDown ['V'] == TRUE){
+		if (g_keys->keydown_time['V'] < 0){			
+			if (g_enableVerticalSync){
+				EnableVerticalSync(false);
+			}else{
+				EnableVerticalSync(true);
+			}
+			g_keys->keydown_time['V'] = 100000;
+		}
+	}
+	g_keys->keydown_time['H'] -=tusec;
+	if(g_keys->keyDown ['H'] == TRUE){
+		if (g_keys->keydown_time['H'] < 0) {
+			dosleep = !dosleep;
+			g_keys->keydown_time['H'] = 100000;
+		}
+	}
+
+	g_keys->keydown_time['J'] -=tusec;
+	if(g_keys->keyDown ['J'] == TRUE){
+		if (g_keys->keydown_time['J'] < 0){
+			
+			docollision = !docollision;
+			g_keys->keydown_time['J'] = 100000;
+		}
 	}
 
 	if(g_keys->keyDown ['Z'] == TRUE){
@@ -816,18 +987,47 @@ void Update(){
 		printf("Timer: %f usec.\n",tusec);
 	}
 
-	if(g_keys->keyDown[VK_LEFT] == TRUE){
-		player[0].ship.RotateImpulse(3,tusec);	
+	//Left
+	if(g_keys->keyDown[VK_NUMPAD2] == TRUE){
+		player[0].ship.RotateImpulse(.3,tusec);	
 	}
-	if(g_keys->keyDown[VK_RIGHT] == TRUE){
-		player[0].ship.RotateImpulse(-3,tusec);	
+	if(g_keys->keyDown[VK_LEFT] == TRUE){
+		player[0].ship.RotateImpulse(.3,tusec);	
 	}
 
+
+	//Right
+	if(g_keys->keyDown[VK_RETURN] == TRUE){
+		player[0].ship.RotateImpulse(-.3,tusec);	
+	}
+	if(g_keys->keyDown[VK_RIGHT] == TRUE){
+		player[0].ship.RotateImpulse(-.3,tusec);	
+	}
+
+	//Up
+	//g_keys->keydown_time[VK_NUMPAD6] -=tusec;
+	if(g_keys->keyDown[VK_NUMPAD6] == TRUE){		
+		//if (g_keys->keydown_time[VK_NUMPAD6] < 0){			
+			player[0].ship.Move(1,tusec);				
+			//g_keys->keydown_time[VK_NUMPAD6] = 50000;		
+		//}		
+	}
+	
 	if(g_keys->keyDown[VK_UP] == TRUE){
 		player[0].ship.Move(1,tusec);	
 	}
+
+	//Down
+	if(g_keys->keyDown[VK_NUMPAD3] == TRUE){
+		player[0].ship.Brake(0.5,tusec);	
+	}
 	if(g_keys->keyDown[VK_DOWN] == TRUE){
 		player[0].ship.Brake(0.5,tusec);	
+	}
+
+
+	if(g_keys->keyDown['R'] == TRUE){
+		player[0].ship.RegenShields(10,tusec);	
 	}
 
 	if(g_keys->keyDown['A'] == TRUE){
@@ -851,16 +1051,17 @@ void Update(){
 
 	}
 
-	if(g_keys->keyDown[VK_SPACE] == TRUE){
-		player[0].ship.Fire(2);
-		g_keys->keyDown[VK_SPACE] = false;
-		
+	g_keys->keydown_time[VK_SPACE] -=tusec;
+	if(g_keys->keyDown[VK_SPACE] == TRUE){		
+		if (g_keys->keydown_time[VK_SPACE] < 0){			
+			player[0].ship.Fire(6);					
+			g_keys->keydown_time[VK_SPACE] = 200000;		
+		}		
 	}
 
+	/*
 	if(g_keys->keyDown[VK_NUMPAD0] == TRUE){
-		player[1].ship.Fire(2);
-		g_keys->keyDown[VK_NUMPAD0] = false;
-		
+		player[1].ship.Fire(2);		
 	}
 
 	if(g_keys->keyDown[VK_NUMPAD4] == TRUE){
@@ -878,7 +1079,7 @@ void Update(){
 	if(g_keys->keyDown[VK_NUMPAD5] == TRUE){
 		player[1].ship.Brake(.5,tusec);	
 	}
-
+	*/
 
 	if (g_keys->keyDown [VK_ESCAPE] == TRUE)					// Is ESC Being Pressed?
 	{
@@ -889,40 +1090,84 @@ void Update(){
 	{
 		ToggleFullscreen (g_window);							// Toggle Fullscreen Mode
 	}
+}
 
+
+//Updates the physics, and tries to keep a constant rate.
+void Update(){	
+	//Time spent in update + whatever happens outside update, in this thread.
+	float tusec = timer_loop.getElapsedTimeInMicroSec();
+	
+
+	//How long do we need to sleep:
+	float sleep_usec = t_target - tusec;	
+	
+	//Update
+	if (ticks > 500000){
+		//Resetr the counters, update their last value.
+		counter_s_reset(&cnt_render);
+		counter_s_reset(&cnt_fps);
+		counter_s_reset(&cnt_idle);
+		counter_s_reset(&cnt_physics);
+		counter_s_reset(&cnt_loop);	
+		ticks = 0;
+	}
+	
+	
+	//Limit physics, so they don't go crazy.
+	if (tusec > 60000){
+		tusec = 60000;
+	}
+	
+	float t_slept = 0;
+	timer_idle.start();
+	if (dosleep){ //Add extra time.
+			usleep(25000);
+			//Sleep(sleep_usec/1000);
+		}
+
+	if (tusec < t_target){			
+		//Sleep away remainder of time.
+		//Sleep(sleep_usec/1000);
+		usleep(sleep_usec);		
+		
+		
+		
+	}		
+	t_slept = timer_idle.getElapsedTimeInMicroSec();		
+	counter_s_add(&cnt_idle,t_slept);
+	tusec += t_slept;
+
+
+	//Add to counter.
+	counter_s_add(&cnt_loop,tusec);	
+
+	//Begin physics timer.
+	timer_physics.start();
+	timer_loop.start();
+	
+	printf("tusec: %6.1f tslept %6.1f\n",tusec,t_slept);
 
 	for (int i=0;i<num_players;i++){
 		player[i].DoPhysics(tusec);	
 	}
 
-	if (player[0].ship.position.x > 100){
-		player[0].ship.position.x = -100;	
-	}
-	if (player[0].ship.position.x < -105){
-		player[0].ship.position.x = +95;	
-	}
-	if (player[0].ship.position.y > 105){
-		player[0].ship.position.y = -95;	
-	}
-	if (player[0].ship.position.y < -100){
-		player[0].ship.position.y = 100;	
-	}
+	int bound = 75;
+	int bound_hyst = 5;
 
-	for(int i=0;i<num_asteroids;i++){
-		asteroid[i].DoPhysics(tusec);
-		if (asteroid[i].position.x > 100){
-			asteroid[i].position.x = -100;	
-		}
-		if (asteroid[i].position.x < -105){
-			asteroid[i].position.x = 95;	
-		}
-		if (asteroid[i].position.y > 105){
-			asteroid[i].position.y = -95;	
-		}
-		if (asteroid[i].position.y < -100){
-			asteroid[i].position.y = +100;	
-		}
+	if (player[0].ship.position.x > (bound)){
+		player[0].ship.position.x = -(bound);
 	}
+	if (player[0].ship.position.x < -(bound+bound_hyst)){
+		player[0].ship.position.x = +(bound-bound_hyst);	
+	}
+	if (player[0].ship.position.y > (bound+bound_hyst)){
+		player[0].ship.position.y = -(bound-bound_hyst);	
+	}
+	if (player[0].ship.position.y < -(bound)){
+		player[0].ship.position.y = (bound);	
+	}
+	
 
 	for(int i=0;i<num_smoke;i++){
 		smoke[i].DoPhysics(tusec);
@@ -935,10 +1180,10 @@ void Update(){
 	
 	
 
-	
+	#if COMPILE_NETWORK
 	//Update date from other players if any.
 	net_man.receive();
-	
+	#endif
 
 	
 
@@ -971,30 +1216,88 @@ void Update(){
 				player[i].ship.momentum = asteroid[r].momentum;
 				asteroid[r].momentum = t;
 
+
+				
 			}
 		}
 	}
 
-	//Asteroid on Asteroid collisions.
-	
+	/*
+	//Asteroid on Asteroid collisions.	
 	for(int i=0;i<(num_asteroids-1);i++){
 		for(int r=i+1;r<num_asteroids;r++){
 			if (CheckCollision_AstAst(&asteroid[i],&asteroid[r])){		
-
 				//float tot_damage = vect_abs(&asteroid[i].momentum);				
 				//tot_damage += vect_abs(&asteroid[r].momentum);
-
-				//tot_damage *= 0.01;
-				
+				//tot_damage *= 0.01;				
 				vect2 t = asteroid[i].momentum;
 				asteroid[i].momentum = asteroid[r].momentum;
 				asteroid[r].momentum = t;
 
+				asteroid[r].collision_timout = 100000;
+				asteroid[i].collision_timout = 100000;
 				//asteroid[r].DoDamage(tot_damage,asteroid[i].velocity,asteroid[i].position);
 				//asteroid[i].DoDamage(tot_damage,asteroid[r].velocity,asteroid[r].position);
 			}
 		}
 	}
+	*/
+
+	alive_asteroids = 0;
+	//Asteroid-Asteroid.
+	for(int i=0;i<num_asteroids;i++){
+		//Check if it's alive.
+		if (asteroid[i].alive){
+			alive_asteroids++;
+			//If so, apply bounding box:
+			if (asteroid[i].position.x > (bound)){
+				asteroid[i].position.x = -(bound);	
+			}
+			if (asteroid[i].position.x < -(bound+bound_hyst)){
+				asteroid[i].position.x = (bound-bound_hyst);	
+			}
+			if (asteroid[i].position.y > (bound+bound_hyst)){
+				asteroid[i].position.y = -(bound-bound_hyst);	
+			}
+			if (asteroid[i].position.y < -(bound)){
+				asteroid[i].position.y = +(bound);	
+			}
+
+			/*
+			//This loop already seems to be quite costly...
+			float cnt = 100*100;
+			if (docollision){ //Enable/disable
+				while(cnt--){
+					
+				}
+			}
+			*/
+
+			
+			//Check collision against other asteroids:
+			if (docollision){ //Enable/disable
+				for(int r=i+1;r<num_asteroids;r++){
+					if (CheckCollision_AstAst(&asteroid[i],&asteroid[r])){		
+						//float tot_damage = vect_abs(&asteroid[i].momentum);				
+						//tot_damage += vect_abs(&asteroid[r].momentum);
+						//tot_damage *= 0.01;				
+						vect2 t = asteroid[i].momentum;
+						asteroid[i].momentum = asteroid[r].momentum;
+						asteroid[r].momentum = t;
+
+						asteroid[r].collision_timout = 100000;
+						asteroid[i].collision_timout = 100000;
+						//asteroid[r].DoDamage(tot_damage,asteroid[i].velocity,asteroid[i].position);
+						//asteroid[i].DoDamage(tot_damage,asteroid[r].velocity,asteroid[r].position);
+					}
+				}
+			}
+			
+			asteroid[i].DoPhysics(tusec);
+		}
+	}
+
+
 	
 	//Check collision for ech bullet.
 	for (int r=0;r<num_players;r++){
@@ -1017,14 +1320,24 @@ void Update(){
 			//Asteroids
 			for(int p=0;p<num_asteroids;p++){
 
-				if (CheckCollision_Object(&player[r].ship.weapon.bullet[i],&asteroid[p])){			
+				if (CheckCollision_Object(&player[r].ship.weapon.bullet[i],&asteroid[p])){
+					/*vect2 tdist = vect_diff(&player[r].ship.weapon.bullet[i].position,&player[r].ship.position);
+					float dist = vect_abs(&tdist)/5;
+					if (dist < 1){
+						dist = 1;
+					}*/
+					//printf("Distance: %6.2f\n",dist);
+					#if COMPILE_SOUND
+					sound_play(SND_IMPACT,5.0f);
+					#endif
+
 					player[r].ship.weapon.bullet[i].alive = false;
 					vect2 t = player[r].ship.weapon.bullet[i].velocity;
 					t.x /= 10;
 					t.y /= 10;
 					asteroid[p].DoDamage(10,t,player[r].ship.weapon.bullet[i].position);
 
-				
+					
 				}
 			}
 
@@ -1042,7 +1355,42 @@ void Update(){
 		}
 	}
 	
+	//Check collision with crates.
+	for (int r=0;r<num_players;r++){			
+		for(int p=0;p<num_crates;p++){
+			if (CheckCollision_ShipObject(&player[r].ship,&crate[p])){			
+				int pwr = rand()%6;
+				switch(pwr){
+				case 0:
+					player[r].ship.shield_max += (crate[p].size*crate[p].health*.2f);
+					break;
+				case 1:
+					player[r].ship.shield += (crate[p].size*crate[p].health);
+					if (player[r].ship.shield > player[r].ship.shield_max){
+						player[r].ship.shield = player[r].ship.shield_max;
+					}
+					break;
+				case 2:
+					player[r].ship.health += (crate[p].size*crate[p].health*.1f);
+					player[r].ship.health_max += (crate[p].size*crate[p].health*.1f);
+					break;
+				case 3:
+					player[r].ship.energy += (crate[p].size*crate[p].health);
+					if (player[r].ship.energy > player[r].ship.energy_max){
+						player[r].ship.energy = player[r].ship.energy_max;
+					}
+					break;
+				case 4:
+					player[r].ship.energy_max += (crate[p].size*crate[p].health*.5f);					
+					break;				
+				default:
+					break;
+				}
 
+				crate[p].alive = false;				
+			}
+		}
+	}
 	
 
 	
@@ -1055,25 +1403,34 @@ void Update(){
 		DynamicZoom(tusec);
 	}
 
-	//Update time timer.
-	if (ticks > 200000){	
-		time_physics = game_timer.getElapsedTimeInMicroSec();
-		ticks = 0;
-	}
+	//Update time timer.		
+	float physics_time = timer_physics.getElapsedTimeInMicroSec();
+	counter_s_add(&cnt_physics,physics_time);
+
 	ticks += tusec;
 	ticks_alive += tusec;
 	ticks_netupdate += tusec;
 
 	if (ticks_alive > 2000000){	
+		#if COMPILE_NETWORK
 		net_man.send_alive();
+		#endif
 		ticks_alive = 0;
+
+		//Keystate
+		printf("State A     : %i\n", GetKeyState('A'));
+		printf("State D     : %i\n", GetKeyState('D'));
+		printf("State LEFT  : %i\n", GetKeyState(VK_LEFT));
+		printf("State RIGHT : %i\n", GetKeyState(VK_RIGHT));		
 	}
 
 	if (ticks_netupdate > 100000){	
 		//Send data	
+		#if COMPILE_NETWORK
 		net_man.send();
+		#endif
 		ticks_netupdate = 0;
-	}
+	}	
 }
 
 float osd_rot = 0;
@@ -1081,7 +1438,7 @@ float osd_rot = 0;
 void DrawOSD(void){
 	glLoadIdentity();
 	glClearDepth(1.0f);
-	glEnable(GL_MULTISAMPLE_ARB);
+	
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE);
 	glEnable(GL_BLEND);
 	glEnable(GL_POLYGON_SMOOTH);
@@ -1098,6 +1455,8 @@ void DrawOSD(void){
 	float scale = 1/20.0f;
 	glScalef(scale,scale,1);
 
+	//Save matrix
+	glPushMatrix();
 	//Get vector to origin.
 	vect2 tv = player[0].ship.position;
 	osd_rot = vect_ordeg(&tv);
@@ -1113,6 +1472,29 @@ void DrawOSD(void){
 		glVertex2f(0,1);
 		glVertex2f(1,-1);		
 	glEnd();
+	glPopMatrix();
+
+	//Arrow to players.
+	for (int i = 1;i<num_players;i++){
+		if(player[i].ship.alive){
+			//Get vector to origin.
+			vect2 tv = vect_diff(&player[0].ship.position,&player[i].ship.position);
+			osd_rot = vect_ordeg(&tv);
+			glPushMatrix();
+			glRotatef(osd_rot,0,0,1);
+			glTranslatef(0,20,0);
+			osd_rot += 0.1f;
+
+			//Gray bar.
+			glColor4f(0.5f,0.7f,1.0f,0.1f);	
+			glBegin(GL_TRIANGLES);
+				glVertex2f(-1,-1);
+				glVertex2f(0,1);
+				glVertex2f(1,-1);		
+			glEnd();
+			glPopMatrix();
+		}
+	}
 
 }
 
@@ -1185,95 +1567,84 @@ void DrawSide(void){
 		glVertex2f(barw*200,50);
 		glVertex2f(barw*200,25);
 	glEnd();
+
+	glColor4f(1,0.7f,0.0f,0.3);	
+	barw = player[0].ship.energy/player[0].ship.energy_max;
+	glBegin(GL_QUADS);
+		glVertex2f(0,50);
+		glVertex2f(0,75);
+		glVertex2f(barw*200,75);
+		glVertex2f(barw*200,50);
+	glEnd();
 	
 	glLoadIdentity();	
 	g_font.setColor(1.0f, 1.0f, 1.0f);
-	glPrintAA(10,2,"%7.1f/%7.1f",player[0].ship.health,player[0].ship.health_max);	
-	glPrintAA(10,25,"%7.1f/%7.1f",player[0].ship.shield,player[0].ship.shield_max);	
-	glPrintAA(10,50,"Screen:  %i x %i",screen_w,screen_h);	
-	glPrintAA(10,70,"Render Time: %6.0f/%6.0f",average_time_off,t_target);	
-	glPrintAA(10,90,"Physics Time: %6.0f",time_physics);
+	glPrintAA(10,2,  "%5.1f /%5.1f (%4.2f)",player[0].ship.health,player[0].ship.health_max,player[0].ship.health_regen);	
+	glPrintAA(10,25, "%5.1f /%5.1f (%4.2f)",player[0].ship.shield,player[0].ship.shield_max,player[0].ship.shield_regen);	
+	glPrintAA(10,50, "%5.1f /%5.1f (%4.2f)",player[0].ship.energy,player[0].ship.energy_max,player[0].ship.energy_regen);
+
+
+	glPrintAA(10,70, "Screen:  %i x %i",screen_w,screen_h);	
+	glPrintAA(10,90, "Loop Time     : %6.0f (%6.0f)",cnt_loop.last,t_target);
+	glPrintAA(10,110, " Physics Time : %6.0f",cnt_physics.last);
+	glPrintAA(10,130," Physics Idle : %6.0f",cnt_idle.last);
+	glPrintAA(10,150," Render Time  : %6.0f",cnt_render.last);
+
+	//looptime
+	float fps = 1000000/(cnt_fps.last);
+
+	glPrintAA(10,230,"FPS         : %6.1f",fps);
+
+	glPrintAA(10,250,"Asteroids   : %i",alive_asteroids);
+
+	
 }
 
+void load_shader(){
+	GLuint shader = glCreateShader(GL_VERTEX_SHADER_ARB);
+
+} 
 
 
 void Draw(void)												// Draw The Scene
 {
-	render_done = false;
+	render_done = false;	
+	//Time this entire function.
+	timer_render.start();
+
+	//This times this entire function, and everything outside in the same thread.
+	float t_fps = timer_fps.getElapsedTimeInMicroSec();
+	timer_fps.start();
+	counter_s_add(&cnt_fps,t_fps);
+
+	// ROACH
+	if(domulti){
+		glEnable(GL_MULTISAMPLE_ARB);	
+	}else{
+		glDisable(GL_MULTISAMPLE_ARB);
+	}
 
 	glClearColor(0.0f, 0.0f, 0.0f, 0.5);						// Set The Clear Color To Black
 	glClear (GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);		// Clear Screen And Depth Buffer
 	glLoadIdentity();											// Reset The View	
-
 	glClearDepth(1.0f);
 
-	glEnable(GL_MULTISAMPLE_ARB);
-	glBlendFunc(GL_SRC_ALPHA, GL_ONE);
 	glEnable(GL_BLEND);
 	glEnable(GL_POLYGON_SMOOTH);
 	glHint(GL_POLYGON_SMOOTH_HINT, GL_NICEST);
-	
-
-	
-
-	/*
-	for(float i=-0;i<1;i++){
-		for(float j=-0;j<1;j++)
-		{
-			glPushMatrix();
-			glTranslatef(i*2.0f,j*2.0f,-5.0f);
-			glRotatef(angle,0.f,0.f,1.f);
-				glBegin(GL_QUADS);
-				glColor3f(1.0f,0.0f,0.0f);glVertex3f(i,j,0.0f);
-				glColor3f(0.0f,1.0f,0.0f);glVertex3f(i + 2.0f,j,0.0f);
-				glColor3f(0.0f,0.0f,1.0f);glVertex3f(i + 2.0f,j + 2.0f,0.0f);
-				glColor3f(1.0f,1.0f,1.0f);glVertex3f(i,j + 2.0f,0.0f);
-				glEnd();
-			glPopMatrix();
-		}
-	}*/
-
-	//Draw Square.
-	/*
-	glBegin(GL_QUADS);
-	glColor4f(1.0f,0.0f,0.0f,0.2f);glVertex3f(-1,1,-10.0f);
-	glColor4f(0.0f,1.0f,0.0f,0.2f);glVertex3f(-1,-1,-10.0f);
-	glColor4f(0.0f,0.0f,1.0f,0.2f);glVertex3f(1,-1,-10.0f);
-	glColor4f(1.0f,1.0f,1.0f,0.2f);glVertex3f(1,1,-10.0f);
-	glEnd();
-	*/
-
-	
-	
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+		
 	glPushMatrix();
-
+	
 	background.Render(player[0].ship.position);
 	glTranslatef(0,0,zoom);
 	glScalef(0.15,0.15,1);
-	
-	/*
-	*/
-	/*
-	glEnable(GL_TEXTURE_2D);
-	glColor4f(1.0f,1.0f,1.0f,1.0f);
-	glBindTexture(GL_TEXTURE_2D, textureid);
-	glBegin(GL_QUADS);
-		 glTexCoord2f(0.0, 0.0);
-		 glVertex3f(0.0, 0.0, 0.0f);
-		 glTexCoord2f(1.0, 0.0);
-		 glVertex3f(1.0, 0.0, 0.0f);
-		 glTexCoord2f(1.0, 1.0);
-		 glVertex3f(1.0, 1.0, 0.0f);
-		 glTexCoord2f(0.0, 1.0);
-		 glVertex3f(0.0, 1.0, 0.0f);
-	glEnd();
-	glDisable(GL_TEXTURE_2D);*/
-	
-	//Render all players relative to player[0].
 
+	//This'll make you seasick.
+	//glRotatef(-player[0].ship.angledeg,0,0,1);	
+	
 	for(int i =0;i<num_players;i++){
-		player[i].Render(player[0].ship.position,false);
-		
+		player[i].Render(player[0].ship.position,false);		
 	}
 
 	Asteroid::PreRender();
@@ -1288,39 +1659,28 @@ void Draw(void)												// Draw The Scene
 	
 	//Render Smoke
 	Smoke::PreRender();
-	/*
-	for(int i=0;i<num_asteroids;i++){
-		asteroid[i].RenderSmoke(player[0].ship.position);
-	}
-
-	for(int i=0;i<num_crates;i++){
-		crate[i].RenderSmoke(player[0].ship.position);
-	}*/
 	for(int i=0;i<num_smoke;i++){
 		smoke[i].Render(player[0].ship.position);
 	}
-
-
-	
+		
 	glPopMatrix();
-	//background.Move(player[0].ship.position);
+	
 	
 	DrawSide();
 	DrawOSD();
 	
-	if(doangle)
-		angle+=0.05f;
-
 	//glFlush ();													// Flush The GL Rendering Pipeline
 	
-	// ROACH
-	if(domulti)
-		glDisable(GL_MULTISAMPLE_ARB);
-	// ENDROACH
-
-	SwapBuffers(g_window->hDC);
-	//glFinish();
 	render_done = true;
+
+	if(domulti){
+		glDisable(GL_MULTISAMPLE_ARB);
+	}
+	
+	SwapBuffers(g_window->hDC);
+	
+	float t_render = timer_render.getElapsedTimeInMicroSec();
+	counter_s_add(&cnt_render,t_render);
 }
 
 

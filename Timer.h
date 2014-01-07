@@ -21,6 +21,20 @@
 #include <sys/time.h>
 #endif
 
+#include <stdint.h>
+
+//C-style counters for keeping time.
+typedef struct{
+	uint64_t sum;		//Sum
+	double average;		//Continuous average
+	uint32_t cnt;		//Counts
+	float last;			//Last value before reset.
+}counter_s;
+
+void counter_s_clear(counter_s* t);
+void counter_s_reset(counter_s* t);
+void counter_s_add(counter_s* t, float val);
+
 
 class Timer
 {

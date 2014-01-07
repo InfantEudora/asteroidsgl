@@ -74,5 +74,8 @@
     <ClInclude Include="NetworkManager.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="asteroids_common.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>
