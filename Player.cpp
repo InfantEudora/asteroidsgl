@@ -335,6 +335,9 @@ void ObjManager::init_shaders(){
 	va_rotation = glGetUniformLocation(shader_program, "Angle");
 	va_location = glGetUniformLocation(shader_program, "offset");
 
+	va_textures[0]= glGetUniformLocation(shader_program, "textures[0]");
+	va_textures[1]= glGetUniformLocation(shader_program, "textures[1]");
+
 	va_zoom = glGetUniformLocation(shader_program, "zoom");
 
 	//Fragent shader.
@@ -391,11 +394,74 @@ void ObjManager::Rotate(float by, float t){
 }
 
 
-void ObjManager::_render(void){
+void ObjManager::render(void){
+    glClearColor(0.15f, 0.15f, 0.15f, 1.0f);
+	glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+	glEnable(GL_LINE_SMOOTH);
+	glEnable(GL_LINE_SMOOTH_HINT);
+
+	glUseProgram(shader_program);
+
+	glEnableClientState(GL_VERTEX_ARRAY);
+	
+	glUniform2f(va_location, 1,0);
+	glUniform1f(va_rotation, orientation);
+	glUniform1f(va_zoom, 0.1f);
+
+	glUniform4f(va_color, color4[0], color4[1], color4[2], color4[3]);
+	
+	glBindBuffer(GL_ARRAY_BUFFER_ARB, vertex_buffer);
+	glEnableVertexAttribArray(va_position);	
+	glVertexAttribPointer( va_position,
+				2,                             
+				GL_FLOAT,                         
+				GL_FALSE,                        
+				sizeof(GLfloat)*2,               
+				(void*)0);
+
+	glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, texture);
+    glUniform1i(texture, 0);
+
+
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER_ARB, element_buffer);	
+	
+	glUniform2f(va_location, 0,0);
+	glUniform1f(va_rotation, orientation);
+	glUniform1f(va_scale, 1);
+
+	glDrawElements(
+		GL_TRIANGLE_STRIP,
+		4,
+		GL_UNSIGNED_SHORT,
+		(void*)0          
+	);
+
+	
+
+	
+
+	//glDrawArrays(GL_LINE_STRIP,0,5);
+
+	glDisableVertexAttribArray(va_position);
+	/*
+	glBegin(GL_QUADS);		
+		glColor4f(1,1,1,1);
+		glTexCoord2f(0,0);		glVertex3f(-1, -1, 0.0f);
+		glTexCoord2f(1.0, 0);	glVertex3f(1.0, -1, 0.0f);
+		glTexCoord2f(1.0, 1.0);glVertex3f(1.0, 1.0, 0.0f);
+		glTexCoord2f(0, 1.0);	glVertex3f(-1, 1.0, 0.0f);		
+	glEnd();*/
+	glDisableClientState(GL_VERTEX_ARRAY);
+	glDisableClientState(GL_TEXTURE_COORD_ARRAY);	
+
+	glUseProgram(0);
 }
 
 
-void ObjManager::render(void){
+void ObjManager::_render(void){
 	
 
     glClearColor(0.15f, 0.15f, 0.15f, 1.0f);

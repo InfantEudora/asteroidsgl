@@ -103,6 +103,8 @@ public:
 
 	GLuint va_scale;
 
+	GLuint va_textures[2];
+
 
 	void render();
 	void _render();
