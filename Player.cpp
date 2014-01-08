@@ -240,13 +240,13 @@ float whatvect_abs(vect2* a, vect2* b)
 
  void ObjManager::doPhysics(){
 	 for(int i =0;i<num_balls;i++){
-		b_rotation[i] = rand()%360;
+		b_rotation[i] += 0.1f;
 	}
  }
 
 ObjManager::ObjManager(){
 	//Coordinates for balls.
-	num_balls = 2500;
+	num_balls = 1000;
 	for(int i =0;i<num_balls*2;i++){
 		b_position[i] = (rand()%10000-5000)/500.0f;
 	}
@@ -267,6 +267,7 @@ ObjManager::ObjManager(){
 	color4[3] = 1;
 
 	orientation = 0;
+	zoom = 1;
 
 
 };
@@ -280,7 +281,7 @@ void ObjManager::init(){
 
 void ObjManager::init_textures(){
 	//Generate texture
-	LoadFileTGA("bitmaps/ball.tga",texture_data, TGA_SIZE_256);
+	LoadFileTGA("bitmaps/rock2.tga",texture_data, TGA_SIZE_256);
 
 	glGenTextures(1, &texture);
 	glBindTexture(GL_TEXTURE_2D, texture);
@@ -304,12 +305,44 @@ void ObjManager::init_shaders(){
 
 	//ball.init_resources(shader_program);
 
+	 b_position[0] =0;
+	 b_position[1] =0;
 
-	GLfloat g_vertex_data[8] = {-1,-1,-1,1,1,1,1,-1};
-	GLfloat g_texture_data[8] = {0,0,0,1,1,0,1,1};
+	for (int i=0;i<num_balls;i++){
+		g_vertex_data[(8*i)+0] = -1;
+		g_vertex_data[(8*i)+1] = -1;
+		g_vertex_data[(8*i)+2] = -1;
+		g_vertex_data[(8*i)+3] = 1;
+		g_vertex_data[(8*i)+4] = 1;
+		g_vertex_data[(8*i)+5] = 1;
+
+
+		g_vertex_data[(8*i)+6] = 1;
+		g_vertex_data[(8*i)+7] = -1;
+
+
+	
+		g_vertex_location[(8*i)+0] = b_position[(8*i)];
+		g_vertex_location[(8*i)+1] = b_position[(8*i)+1];
+		g_vertex_location[(8*i)+2] = b_position[(8*i)];
+		g_vertex_location[(8*i)+3] = b_position[(8*i)+1];
+		g_vertex_location[(8*i)+4] = b_position[(8*i)];
+		g_vertex_location[(8*i)+5] = b_position[(8*i)+1];
+		g_vertex_location[(8*i)+6] = b_position[(8*i)];
+		g_vertex_location[(8*i)+7] = b_position[(8*i)+1];
+
+	}
 
 	//Index pointers to the square.
-	GLushort g_element_data[4] = {0,1,3,2};
+	for (int i=0;i<num_balls;i++){
+		g_element_data[(i*4)+0] = 0+(i*4);
+		g_element_data[(i*4)+1] = 1+(i*4);
+		g_element_data[(i*4)+2] = 2+(i*4);
+		g_element_data[(i*4)+3] = 3+(i*4);
+		g_element_data[(i*4)+4] = 2+(i*4);
+		g_element_data[(i*4)+5] = 1+(i*4);
+	}
+
 
 	////////////////From here
 	
@@ -319,21 +352,23 @@ void ObjManager::init_shaders(){
 	glBindBufferARB(GL_ARRAY_BUFFER_ARB,vertex_buffer);
 	glBufferDataARB(GL_ARRAY_BUFFER_ARB,sizeof(g_vertex_data),g_vertex_data,GL_STATIC_DRAW);
 
+	//location buffer
+	glGenBuffersARB(1, &location_buffer);
+	glBindBufferARB(GL_ARRAY_BUFFER_ARB,location_buffer);
+	glBufferDataARB(GL_ARRAY_BUFFER_ARB,sizeof(g_vertex_location),g_vertex_location,GL_STATIC_DRAW);
+
 	// element buffer
 	glGenBuffersARB(1, &element_buffer);
 	glBindBufferARB(GL_ELEMENT_ARRAY_BUFFER_ARB,element_buffer);
 	glBufferDataARB(GL_ELEMENT_ARRAY_BUFFER_ARB,sizeof(g_element_data),g_element_data,GL_STATIC_DRAW);
 
-	// text buffer
-	glGenBuffersARB(1, &text_buffer);
-	glBindBufferARB(GL_ARRAY_BUFFER_ARB,text_buffer);
-	glBufferDataARB(GL_ARRAY_BUFFER_ARB,sizeof(g_texture_data),g_texture_data,GL_STATIC_DRAW);
+	
 
 	// vertex shader arguments
 	va_scale = glGetUniformLocation (shader_program, "size");
 	va_position = glGetAttribLocation(shader_program, "position");	
 	va_rotation = glGetUniformLocation(shader_program, "Angle");
-	va_location = glGetUniformLocation(shader_program, "offset");
+	va_location = glGetAttribLocation(shader_program, "offset");
 
 	va_textures[0]= glGetUniformLocation(shader_program, "textures[0]");
 	va_textures[1]= glGetUniformLocation(shader_program, "textures[1]");
@@ -395,23 +430,21 @@ void ObjManager::Rotate(float by, float t){
 
 
 void ObjManager::render(void){
-    glClearColor(0.15f, 0.15f, 0.15f, 1.0f);
+    //glClearColor(0.15f, 0.15f, 0.15f, 1.0f);
 	glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-	glEnable(GL_LINE_SMOOTH);
-	glEnable(GL_LINE_SMOOTH_HINT);
+
 
 	glUseProgram(shader_program);
 
-	glEnableClientState(GL_VERTEX_ARRAY);
 	
-	glUniform2f(va_location, 1,0);
-	glUniform1f(va_rotation, orientation);
-	glUniform1f(va_zoom, 0.1f);
+	
+	
+	glUniform1f(va_zoom, zoom);
 
-	glUniform4f(va_color, color4[0], color4[1], color4[2], color4[3]);
 	
+	//2-Triangle coordinates.
 	glBindBuffer(GL_ARRAY_BUFFER_ARB, vertex_buffer);
 	glEnableVertexAttribArray(va_position);	
 	glVertexAttribPointer( va_position,
@@ -421,41 +454,68 @@ void ObjManager::render(void){
 				sizeof(GLfloat)*2,               
 				(void*)0);
 
+
+	//2-Triangle coordinates.
+	glBindBufferARB(GL_ARRAY_BUFFER_ARB, location_buffer);
+	
+	glBufferDataARB(GL_ARRAY_BUFFER_ARB,sizeof(g_vertex_location),g_vertex_location,GL_DYNAMIC_DRAW_ARB);
+	glEnableVertexAttribArray(va_location);	
+	
+	glVertexAttribPointer( va_location,
+				2,                             
+				GL_FLOAT,                         
+				GL_FALSE,                        
+				sizeof(GLfloat)*2,               
+				(void*)0);
+	
+	//Textures
 	glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, texture);
     glUniform1i(texture, 0);
 
 
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER_ARB, element_buffer);	
+	//Elements
+	/*
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER_ARB, element_buffer);		
+	for(int i =0;i<num_balls;i++){
+		
+		glUniform2f(va_location, b_position[0+i],b_position[1+i]);
+		glUniform1f(va_rotation, b_rotation[i]);
+		glUniform1f(va_scale, b_size[i]);
+		glDrawElements(
+			GL_TRIANGLE_STRIP,
+			4,
+			GL_UNSIGNED_SHORT,
+			(void*)0          
+		);
+	}*/
 	
-	glUniform2f(va_location, 0,0);
-	glUniform1f(va_rotation, orientation);
-	glUniform1f(va_scale, 1);
+	//glUniform2f(va_location, b_position[0],b_position[0]);
+	glUniform1f(va_rotation, b_rotation[0]);
+	glUniform1f(va_scale, b_size[0]);
 
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER_ARB, element_buffer);				
+	/*
 	glDrawElements(
-		GL_TRIANGLE_STRIP,
-		4,
-		GL_UNSIGNED_SHORT,
-		(void*)0          
-	);
-
+			GL_TRIANGLES,
+			3*2,
+			GL_UNSIGNED_SHORT,
+			(void*)0          
+		);*/
 	
+	glBindBuffer(GL_ARRAY_BUFFER_ARB, vertex_buffer);
+	
+	glDrawArrays(GL_QUADS,0,800);
 
 	
 
 	//glDrawArrays(GL_LINE_STRIP,0,5);
 
 	glDisableVertexAttribArray(va_position);
-	/*
-	glBegin(GL_QUADS);		
-		glColor4f(1,1,1,1);
-		glTexCoord2f(0,0);		glVertex3f(-1, -1, 0.0f);
-		glTexCoord2f(1.0, 0);	glVertex3f(1.0, -1, 0.0f);
-		glTexCoord2f(1.0, 1.0);glVertex3f(1.0, 1.0, 0.0f);
-		glTexCoord2f(0, 1.0);	glVertex3f(-1, 1.0, 0.0f);		
-	glEnd();*/
-	glDisableClientState(GL_VERTEX_ARRAY);
-	glDisableClientState(GL_TEXTURE_COORD_ARRAY);	
+	glDisableVertexAttribArray(va_location);
+
+	//glDisableClientState(GL_VERTEX_ARRAY);
+	//glDisableClientState(GL_TEXTURE_COORD_ARRAY);	
 
 	glUseProgram(0);
 }
@@ -554,6 +614,15 @@ void ObjManager::_render(void){
 
 	glUseProgram(0);
 }
+
+
+
+
+
+
+
+
+
 
 
 Ship::Ship(){

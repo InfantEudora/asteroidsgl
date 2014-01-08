@@ -75,11 +75,15 @@ public:
 	GLuint make_program(GLuint vertex_shader, GLuint fragment_shader);
 
 	//Always the same square.
-	GLfloat g_vertex_data[8];
-	GLfloat g_texture_data[8];
+	GLfloat g_vertex_data[8*1000];
+	GLfloat g_vertex_location[8*1000];
 
 	//An array of indices... which are also the same.
-	GLushort g_element_data[5];
+	GLushort g_element_data[6*1000];
+	
+
+	//Object ofsetts.
+	GLfloat g_offset_data[8];
 
 	int num_balls;
 	GLfloat b_position[10000];
@@ -89,10 +93,12 @@ public:
 	//And the buffers that go with it.
 	GLuint vertex_buffer;
 	GLuint element_buffer;
-	GLuint text_buffer;
+	GLuint location_buffer;
 	
 	GLfloat color4[4];
+
 	float orientation;
+	float zoom;
 
 	//Shader arguments
 	GLint va_position;

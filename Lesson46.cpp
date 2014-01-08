@@ -31,7 +31,7 @@ bool domulti = true;
 
 bool dodynamiczoom = true;
 
-bool docollision = true;
+bool docollision = false;
 bool dosleep = false;
 
 // ENDROACH
@@ -1058,16 +1058,20 @@ void handle_input(float tusec){
 
 	if(g_keys->keyDown[VK_NEXT] == TRUE){
 		zoom -= 0.1f;
+		obj_man.zoom /= 1.1f;
 		if (zoom < -8)
 			zoom = -8;
 	}
 
 	if(g_keys->keyDown[VK_PRIOR] == TRUE){
 		zoom += 0.1f;
+		obj_man.zoom *= 1.1f;
 		if (zoom > -1.2)
 			zoom = -1.2;
 
 	}
+
+	
 
 	g_keys->keydown_time[VK_SPACE] -=tusec;
 	if(g_keys->keyDown[VK_SPACE] == TRUE){		
