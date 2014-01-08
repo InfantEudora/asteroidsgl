@@ -1,11 +1,13 @@
 #version 110 
 
-attribute  vec4 position;	//It's own position offset.
+attribute  vec2 position;	//It's own position offset.
 
 uniform float size;			//Size of object.
-uniform float Angle;		//It's orientation
+attribute float Angle;		//It's orientation
 attribute  vec2 offset;		//It's world coordinate offset.
 uniform float zoom;			//Zzooom
+
+uniform mat4 projection;
 
 varying vec2 texcoord;
 
@@ -21,20 +23,26 @@ void main()
 					      		sina,  	cosa, 	0.0, 	0.0,
 			    	      		0.0,	0.0,	1.0, 	0.0,
 				          		0.0,	0.0, 	0.0, 	1.0);
+
+
+
 	
-	vec4 position2;
+	vec4 rotated;
+	vec4 position4;
+	position4 =  vec4(position.x,position.y,1,1);
+
 	//vec4 add = vec4(0.1,0.1,0,0);
 
 	texcoord = vec2(position.x,position.y) * vec2(0.5) + vec2(0.5);
 	
 
 
-	position2 =  (position*RotationMatrix);
+	rotated =  (position4*RotationMatrix);
 				          
 	//vec4 totalOffset = vec4(offset.x*zoom, offset.y*zoom, 0.0, 0.0);
 	vec4 totalOffset = vec4(offset.x*zoom, offset.y*zoom, 0.0, 0.0);
 	
-    gl_Position = position2 + totalOffset;
+    gl_Position = gl_ModelViewProjectionMatrix*rotated + totalOffset;
     
     
 }

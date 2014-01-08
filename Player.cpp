@@ -239,23 +239,26 @@ float whatvect_abs(vect2* a, vect2* b)
  }
 
  void ObjManager::doPhysics(){
-	 for(int i =0;i<num_balls;i++){
-		b_rotation[i] += 0.1f;
+	for(int i =0;i<num_balls;i++){
+		for(int r =0;r<8;r++){
+			g_vertex_rotation[(i*8)+r] += 0.1f;
+		}
 	}
  }
 
 ObjManager::ObjManager(){
 	//Coordinates for balls.
-	num_balls = 1000;
+	num_balls = MAX_NUM_OBJ;
 	for(int i =0;i<num_balls*2;i++){
-		b_position[i] = (rand()%10000-5000)/500.0f;
+		b_position[i] = (rand()%10000-5000)/1500.0f;
 	}
 
 	//Orientation for the balls.
+	/*
 	for(int i =0;i<num_balls;i++){
 		b_rotation[i] = rand()%360;
-		b_size[i] = (rand()%100+10)/1000.0f;
-	}
+		b_size[i] = (rand()%100+20)/800.0f;
+	}*/
 
 	//Just a square.
 	//GLfloat g_vertex_data[8] = {-1,-1,-1,1,1,1,1,-1};
@@ -281,12 +284,23 @@ void ObjManager::init(){
 
 void ObjManager::init_textures(){
 	//Generate texture
-	LoadFileTGA("bitmaps/rock2.tga",texture_data, TGA_SIZE_256);
+	LoadFileTGA("bitmaps/rock2.tga",texture_data_rock, TGA_SIZE_256);
+	LoadFileTGA("bitmaps/ball.tga",texture_data_ball, TGA_SIZE_256);
+	LoadFileTGA("bitmaps/nebula2.bmp",texture_data_back_1, BMP_SIZE_1024);
 
-	glGenTextures(1, &texture);
-	glBindTexture(GL_TEXTURE_2D, texture);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 256, 256, 0, GL_BGRA, GL_UNSIGNED_BYTE, texture_data);
+	glGenTextures(3, &textures[0]);
+	glBindTexture(GL_TEXTURE_2D, textures[0]);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 256, 256, 0, GL_BGRA, GL_UNSIGNED_BYTE, texture_data_rock);
+	glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR); // Linear Filtering
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR); // Linear Filtering
 
+	glBindTexture(GL_TEXTURE_2D, textures[1]);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 256, 256, 0, GL_BGRA, GL_UNSIGNED_BYTE, texture_data_ball);
+	glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR); // Linear Filtering
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR); // Linear Filtering
+
+	glBindTexture(GL_TEXTURE_2D, textures[2]);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, 1024, 1024, 0, GL_BGR, GL_UNSIGNED_BYTE, texture_data_back_1);
 	glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR); // Linear Filtering
     glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR); // Linear Filtering
 }
@@ -308,6 +322,7 @@ void ObjManager::init_shaders(){
 	 b_position[0] =0;
 	 b_position[1] =0;
 
+
 	for (int i=0;i<num_balls;i++){
 		g_vertex_data[(8*i)+0] = -1;
 		g_vertex_data[(8*i)+1] = -1;
@@ -315,33 +330,31 @@ void ObjManager::init_shaders(){
 		g_vertex_data[(8*i)+3] = 1;
 		g_vertex_data[(8*i)+4] = 1;
 		g_vertex_data[(8*i)+5] = 1;
-
-
 		g_vertex_data[(8*i)+6] = 1;
 		g_vertex_data[(8*i)+7] = -1;
 
-
+		
 	
-		g_vertex_location[(8*i)+0] = b_position[(8*i)];
-		g_vertex_location[(8*i)+1] = b_position[(8*i)+1];
-		g_vertex_location[(8*i)+2] = b_position[(8*i)];
-		g_vertex_location[(8*i)+3] = b_position[(8*i)+1];
-		g_vertex_location[(8*i)+4] = b_position[(8*i)];
-		g_vertex_location[(8*i)+5] = b_position[(8*i)+1];
-		g_vertex_location[(8*i)+6] = b_position[(8*i)];
-		g_vertex_location[(8*i)+7] = b_position[(8*i)+1];
+		g_vertex_location[(8*i)+0] = b_position[(i)];
+		g_vertex_location[(8*i)+1] = b_position[(i)+1];
+		g_vertex_location[(8*i)+2] = b_position[(i)];
+		g_vertex_location[(8*i)+3] = b_position[(i)+1];
+		g_vertex_location[(8*i)+4] = b_position[(i)];
+		g_vertex_location[(8*i)+5] = b_position[(i)+1];
+		g_vertex_location[(8*i)+6] = b_position[(i)];
+		g_vertex_location[(8*i)+7] = b_position[(i)+1];
+
+		g_vertex_rotation[(8*i)+0] = 0;
+		g_vertex_rotation[(8*i)+1] = 0;
+		g_vertex_rotation[(8*i)+2] = 0;
+		g_vertex_rotation[(8*i)+3] = 0;
+		g_vertex_rotation[(8*i)+4] = 0;
+		g_vertex_rotation[(8*i)+5] = 0;
+		g_vertex_rotation[(8*i)+6] = 0;
+		g_vertex_rotation[(8*i)+7] = 0;
 
 	}
 
-	//Index pointers to the square.
-	for (int i=0;i<num_balls;i++){
-		g_element_data[(i*4)+0] = 0+(i*4);
-		g_element_data[(i*4)+1] = 1+(i*4);
-		g_element_data[(i*4)+2] = 2+(i*4);
-		g_element_data[(i*4)+3] = 3+(i*4);
-		g_element_data[(i*4)+4] = 2+(i*4);
-		g_element_data[(i*4)+5] = 1+(i*4);
-	}
 
 
 	////////////////From here
@@ -358,20 +371,20 @@ void ObjManager::init_shaders(){
 	glBufferDataARB(GL_ARRAY_BUFFER_ARB,sizeof(g_vertex_location),g_vertex_location,GL_STATIC_DRAW);
 
 	// element buffer
-	glGenBuffersARB(1, &element_buffer);
-	glBindBufferARB(GL_ELEMENT_ARRAY_BUFFER_ARB,element_buffer);
-	glBufferDataARB(GL_ELEMENT_ARRAY_BUFFER_ARB,sizeof(g_element_data),g_element_data,GL_STATIC_DRAW);
+	glGenBuffersARB(1, &rotation_buffer);
+	glBindBufferARB(GL_ELEMENT_ARRAY_BUFFER_ARB,rotation_buffer);
+	glBufferDataARB(GL_ELEMENT_ARRAY_BUFFER_ARB,sizeof(g_vertex_rotation),g_vertex_rotation,GL_STATIC_DRAW);
 
 	
 
 	// vertex shader arguments
 	va_scale = glGetUniformLocation (shader_program, "size");
 	va_position = glGetAttribLocation(shader_program, "position");	
-	va_rotation = glGetUniformLocation(shader_program, "Angle");
+	va_rotation = glGetAttribLocation(shader_program, "Angle");
 	va_location = glGetAttribLocation(shader_program, "offset");
 
-	va_textures[0]= glGetUniformLocation(shader_program, "textures[0]");
-	va_textures[1]= glGetUniformLocation(shader_program, "textures[1]");
+	//va_textures[0]= glGetUniformLocation(shader_program, "textures[0]");
+	//va_textures[1]= glGetUniformLocation(shader_program, "textures[1]");
 
 	va_zoom = glGetUniformLocation(shader_program, "zoom");
 
@@ -431,47 +444,76 @@ void ObjManager::Rotate(float by, float t){
 
 void ObjManager::render(void){
     //glClearColor(0.15f, 0.15f, 0.15f, 1.0f);
-	glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);
-	glEnable(GL_BLEND);
+	//glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);
+	//glEnable(GL_BLEND);
+
+	//Backdrop?
+	//glActiveTexture(GL_TEXTURE0);
+	glPushMatrix();
+	glLoadIdentity();
+	glTranslatef(0,0,-1);
+	glEnable(GL_TEXTURE_2D);
+	glBindTexture(GL_TEXTURE_2D, textures[2]);
+	glBegin(GL_QUADS);		
+		glColor4f(1,1,1,0.1);
+		glTexCoord2f(0,0);		glVertex3f(-1, -1, .0f);
+		glTexCoord2f(1.0, 0);	glVertex3f(1.0, -1, 0.0f);
+		glTexCoord2f(1.0, 1.0);glVertex3f(1.0, 1.0, 0.0f);
+		glTexCoord2f(0, 1.0);	glVertex3f(-1, 1.0, 0.0f);		
+	glEnd();
+	glPopMatrix();
+
+
+	//Normal-ish.
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
-
 	glUseProgram(shader_program);
 
+	glEnableVertexAttribArray(va_location);	
+	glEnableVertexAttribArray(va_position);	
+	glEnableVertexAttribArray(va_rotation);	
 	
 	
-	
-	glUniform1f(va_zoom, zoom);
 
 	
 	//2-Triangle coordinates.
 	glBindBuffer(GL_ARRAY_BUFFER_ARB, vertex_buffer);
-	glEnableVertexAttribArray(va_position);	
+	
 	glVertexAttribPointer( va_position,
 				2,                             
 				GL_FLOAT,                         
 				GL_FALSE,                        
-				sizeof(GLfloat)*2,               
+				0,//sizeof(GLfloat)*2,               
 				(void*)0);
 
 
 	//2-Triangle coordinates.
-	glBindBufferARB(GL_ARRAY_BUFFER_ARB, location_buffer);
-	
+	glBindBufferARB(GL_ARRAY_BUFFER_ARB, location_buffer);	
 	glBufferDataARB(GL_ARRAY_BUFFER_ARB,sizeof(g_vertex_location),g_vertex_location,GL_DYNAMIC_DRAW_ARB);
-	glEnableVertexAttribArray(va_location);	
+	
 	
 	glVertexAttribPointer( va_location,
 				2,                             
 				GL_FLOAT,                         
 				GL_FALSE,                        
-				sizeof(GLfloat)*2,               
+				0,//sizeof(GLfloat)*2,               
+				(void*)0);
+
+	//Rotation.
+	glBindBufferARB(GL_ARRAY_BUFFER_ARB, rotation_buffer);	
+	glBufferDataARB(GL_ARRAY_BUFFER_ARB,sizeof(g_vertex_rotation),g_vertex_rotation,GL_DYNAMIC_DRAW_ARB);
+	
+	
+	glVertexAttribPointer( va_rotation,
+				1,                             
+				GL_FLOAT,                         
+				GL_FALSE,                        
+				0,//sizeof(GLfloat),
 				(void*)0);
 	
 	//Textures
 	glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, texture);
-    glUniform1i(texture, 0);
+    glBindTexture(GL_TEXTURE_2D, textures[1]);
+    //glUniform1i(textures[0], 0);
 
 
 	//Elements
@@ -491,10 +533,11 @@ void ObjManager::render(void){
 	}*/
 	
 	//glUniform2f(va_location, b_position[0],b_position[0]);
-	glUniform1f(va_rotation, b_rotation[0]);
-	glUniform1f(va_scale, b_size[0]);
+	//glUniform1f(va_rotation, b_rotation[0]);
+	glUniform1f(va_zoom, zoom);
+	glUniform1f(va_scale, .2);
 
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER_ARB, element_buffer);				
+//	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER_ARB, element_buffer);				
 	/*
 	glDrawElements(
 			GL_TRIANGLES,
@@ -504,11 +547,13 @@ void ObjManager::render(void){
 		);*/
 	
 	glBindBuffer(GL_ARRAY_BUFFER_ARB, vertex_buffer);
-	
-	glDrawArrays(GL_QUADS,0,800);
-
-	
-
+	for(int i =0;i<500;i++){
+		glDrawArrays(GL_QUADS,i*4,4);
+	}
+	 glBindTexture(GL_TEXTURE_2D, textures[0]);
+	for(int i =500;i<1500;i++){
+		glDrawArrays(GL_QUADS,i*4,4);
+	}
 	//glDrawArrays(GL_LINE_STRIP,0,5);
 
 	glDisableVertexAttribArray(va_position);
@@ -518,6 +563,9 @@ void ObjManager::render(void){
 	//glDisableClientState(GL_TEXTURE_COORD_ARRAY);	
 
 	glUseProgram(0);
+
+	
+
 }
 
 
@@ -581,12 +629,12 @@ void ObjManager::_render(void){
 	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 256, 256, 0, GL_BGRA, GL_UNSIGNED_BYTE, texture_data);
 	*/
 
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER_ARB, element_buffer);	
+//	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER_ARB, element_buffer);	
 	for(int i =0;i<num_balls;i++){
 		
 		glUniform2f(va_location, b_position[0+i],b_position[1+i]);
-		glUniform1f(va_rotation, b_rotation[i]);
-		glUniform1f(va_scale, b_size[i]);
+//		glUniform1f(va_rotation, b_rotation[i]);
+//		glUniform1f(va_scale, b_size[i]);
 		glDrawElements(
 			GL_TRIANGLE_STRIP,
 			4,

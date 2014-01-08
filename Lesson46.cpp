@@ -1666,7 +1666,7 @@ void Draw(void)												// Draw The Scene
 		
 	glPushMatrix();
 	
-	//background.Render(player[0].ship.position);
+	background.Render(player[0].ship.position);
 	glTranslatef(0,0,zoom);
 	glScalef(0.15,0.15,1);
 

@@ -5,7 +5,7 @@ uniform vec4 color;
 //out vec4 outputColor;
 //uniform sampler2D colorMap;
 
-uniform sampler2D textures[2];
+uniform sampler2D textures[1];
 varying vec2 texcoord;
 
 void main()

@@ -9,6 +9,7 @@
 
 #define BMP_SIZE_128 128*128*3
 #define BMP_SIZE_256 256*256*3
+#define BMP_SIZE_1024 1024*1024*3
 #define TGA_SIZE_256 256*256*4
 
 #define PI 3.14159265f
@@ -74,25 +75,31 @@ public:
 	GLuint make_shader(GLenum type, char *filename);
 	GLuint make_program(GLuint vertex_shader, GLuint fragment_shader);
 
+	
+	#define MAX_NUM_OBJ 1500
+
 	//Always the same square.
-	GLfloat g_vertex_data[8*1000];
-	GLfloat g_vertex_location[8*1000];
+	GLfloat g_vertex_data[8*MAX_NUM_OBJ];
+
+
+	GLfloat g_vertex_location[8*MAX_NUM_OBJ];
+	GLfloat g_vertex_rotation[8*MAX_NUM_OBJ];
 
 	//An array of indices... which are also the same.
-	GLushort g_element_data[6*1000];
+	//GLushort g_element_data[6*1000];
 	
 
 	//Object ofsetts.
-	GLfloat g_offset_data[8];
+	//GLfloat g_offset_data[8];
 
 	int num_balls;
-	GLfloat b_position[10000];
-	GLfloat b_rotation[5000];
-	GLfloat b_size[5000];
+	GLfloat b_position[2*MAX_NUM_OBJ];
+	//GLfloat b_rotation[5000];
+	//GLfloat b_size[5000];
 
 	//And the buffers that go with it.
 	GLuint vertex_buffer;
-	GLuint element_buffer;
+	GLuint rotation_buffer;
 	GLuint location_buffer;
 	
 	GLfloat color4[4];
@@ -109,7 +116,7 @@ public:
 
 	GLuint va_scale;
 
-	GLuint va_textures[2];
+	GLuint va_textures[5];
 
 
 	void render();
@@ -126,9 +133,10 @@ public:
 	
 	//Textures
 	int num_textures;
-	GLuint texture;
-	uint8_t texture_data[TGA_SIZE_256];	
-
+	GLuint textures[2];
+	uint8_t texture_data_rock[TGA_SIZE_256];
+	uint8_t texture_data_ball[TGA_SIZE_256];
+	uint8_t texture_data_back_1[BMP_SIZE_1024];
 
 	GLfloat position[6];
 
