@@ -103,8 +103,241 @@ float whatvect_abs(vect2* a, vect2* b)
 	return t;
 }
 
+ void *file_contents(const char *filename, GLint *length)
+{
+    FILE *f = fopen(filename, "r");
+    void *buffer;
+
+    if (!f) {
+        printf("ERREUR!: Unable to open %s for reading\n", filename);
+        return NULL;
+    }
+
+    fseek(f, 0, SEEK_END);
+    *length = ftell(f);
+    fseek(f, 0, SEEK_SET);
+
+    buffer = malloc(*length+1);
+    *length = fread(buffer, 1, *length, f);
+    fclose(f);
+    ((char*)buffer)[*length] = '\0';
+
+    return buffer;
+}
+
+  GLuint make_buffer(GLenum target, const void *buffer_data,
+		GLsizei buffer_size) {
+	GLuint buffer;
+	glGenBuffers(1, &buffer);
+	glBindBuffer(target, buffer);
+	glBufferData(target, buffer_size, buffer_data, GL_STATIC_DRAW);
+	return buffer;
+}
+
+ void Ball::render(){
+	//glLoadIdentity();									// Reset The Current Modelview Matrix
+	//glTranslatef(0,0.0f,-5.0f);
+	/*
+	glBegin(GL_QUADS);		
+		glColor4f(1,1,1,1);
+		glTexCoord2f(0,0);		glVertex3f(-1, -1, 0.0f);
+		glTexCoord2f(1.0, 0);	glVertex3f(1.0, -1, 0.0f);
+		glTexCoord2f(1.0, 1.0);glVertex3f(1.0, 1.0, 0.0f);
+		glTexCoord2f(0, 1.0);	glVertex3f(-1, 1.0, 0.0f);		
+	glEnd();
+	*/
+
+	glUniform2f(location, 0,0);
+	glUniform1f(rotation, orientation);
+
+	glUniform4f(color, color4[0], color4[1], color4[2], color4[3]);
+	
+	glBindBuffer(GL_ARRAY_BUFFER, vertex_buffer);
+	glVertexAttribPointer( position,
+				2,                             
+				GL_FLOAT,                         
+				GL_FALSE,                        
+				sizeof(GLfloat)*2,               
+				(void*)0);                         
+
+	glEnableVertexAttribArray(position);
+	
+
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, element_buffer);
+	glLineWidth(1.5f);
+	
+	glDrawElements(
+		GL_LINE_STRIP,  /* mode */
+		5,                  /* count */
+		GL_UNSIGNED_SHORT,  /* type */
+		(void*)0            /* element array buffer offset */
+	);
+
+	glDisableVertexAttribArray(position);
+
+ }
+
+ Ball::Ball(){
+ // Setting vertex and element buffer data
+	GLfloat vertex_buffer_data[] = {
+				-3.0f, -3.0f,
+				0.0f, 4.0f,
+				4.0f, -3.0f,
+				0.0f, -1.0f,
+				-3.0f, -3.0f};
+
+	float size = 100;
+
+	for (int i=0;i<2*5;i++) {
+		g_vertex_buffer_data[i] = vertex_buffer_data[i]/size;
+	}
+		
+	//These are more  like pointers.
+	g_element_buffer_data[0] = 0;
+	g_element_buffer_data[1] = 1;
+	g_element_buffer_data[2] = 2;
+	g_element_buffer_data[3] = 3;
+	g_element_buffer_data[4] = 0;
+
+	color4[0] = 1;
+	color4[1] = 1;
+	color4[2] = 1;
+	color4[3] = 1;
+
+	orientation = 0;
+ }
+
+ Ball::~Ball(){
+ 
+ }
+
+ void Ball::init_resources(GLint program) {	 
+	 // vertex buffer
+	vertex_buffer = make_buffer(GL_ARRAY_BUFFER,
+			g_vertex_buffer_data, sizeof(g_vertex_buffer_data));
+	// element buffer
+	element_buffer = make_buffer(GL_ELEMENT_ARRAY_BUFFER,
+			g_element_buffer_data, sizeof(g_vertex_buffer_data));
+
+	// vertex shader arguments
+	position = glGetAttribLocation(program, "position");
+	
+	rotation = glGetUniformLocation(program, "Angle");
+	location = glGetUniformLocation(program, "offset");
+
+	color = glGetUniformLocation(program, "color");
+	
+	this->program = program;
+
+	
+ }
+
+ObjManager::ObjManager(){
+	//Coordinates for balls.
+	GLfloat b_position[] = {1,1,0,0,-1,-1};
+
+	GLfloat b_rotation[] = {10,-40,50};
+
+};
+ObjManager::~ObjManager(){};
 
 
+void ObjManager::init(){
+	init_shaders();
+}
+
+void ObjManager::init_shaders(){
+	//Init glew, and ignore what it returns.
+	glewInit();
+	
+	vertex_shader = make_shader(GL_VERTEX_SHADER,"shaders/vert.glsl");
+	fragment_shader = make_shader(GL_FRAGMENT_SHADER,"shaders/frag.glsl");
+	shader_program = make_program(vertex_shader,fragment_shader);
+
+	if (shader_program == 0) {
+		printf("Failed to create shader_program.\n");		
+	}
+
+	ball.init_resources(shader_program);
+} 
+
+GLuint ObjManager::make_shader(GLenum type, char *filename) {
+	GLint length;
+	GLchar *source = (GLchar*) file_contents(filename, &length);
+	GLuint shader;
+	GLint shader_ok;
+
+	if (!source){
+		printf("Could not find file\n");		
+	}
+
+	shader = glCreateShader(type);
+	glShaderSource(shader, 1, (const GLchar**) &source, &length);
+	free(source);
+	glCompileShader(shader);
+
+	glGetShaderiv(shader, GL_COMPILE_STATUS, &shader_ok);
+	if (!shader_ok) {
+		fprintf(stderr, "Failed to compile %s:\n", filename);
+        //show_info_log(shader, glGetShaderiv, glGetShaderInfoLog);
+        glDeleteShader(shader);
+        return 0;
+	}
+	return shader;
+}
+
+GLuint ObjManager::make_program(GLuint vertex_shader, GLuint fragment_shader) {
+	GLint program_ok;
+
+	GLint program = glCreateProgram();
+	glAttachShader(program, vertex_shader);
+	glAttachShader(program, fragment_shader);
+	glLinkProgram(program);
+
+	glGetProgramiv(program, GL_LINK_STATUS, &program_ok);
+	if (!program_ok) {
+        fprintf(stderr, "Failed to link shader program:\n");
+        //show_info_log(program, glGetProgramiv, glGetProgramInfoLog);
+        glDeleteProgram(program);
+        return 0;
+	}
+
+	scale = glGetUniformLocation (shader_program, "scale");
+
+	return program;
+}
+
+void ObjManager::Rotate(float by, float t){
+
+	this->ball.orientation += by;
+}
+
+void ObjManager::render(void){
+	
+
+    glClearColor(0.15f, 0.15f, 0.15f, 1.0f);
+	glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);
+
+	glUseProgram(shader_program);
+
+	//glEnable(GL_BLEND);
+	//glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+	//glEnable(GL_LINE_SMOOTH);
+	//glEnable(GL_LINE_SMOOTH_HINT);
+	/*
+	glMatrixMode (GL_PROJECTION);										// Select The Projection Matrix
+	glLoadIdentity ();													// Reset The Projection Matrix
+	gluPerspective(45, 1, 1,  100);
+	glMatrixMode (GL_MODELVIEW);										// Select The Modelview Matrix
+	glLoadIdentity ();	
+	*/
+	glUniform1f(scale, 1.0f/100.0f);
+
+	ball.render();
+
+
+	glUseProgram(0);
+}
 
 
 Ship::Ship(){

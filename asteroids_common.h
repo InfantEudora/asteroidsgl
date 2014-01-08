@@ -3,7 +3,7 @@
 
 //Compile flags
 #define COMPILE_NETWORK	0
-#define COMPILE_SOUND	1
+#define COMPILE_SOUND	0
 
 #define SND_WEAPON	0
 #define SND_IMPACT	1

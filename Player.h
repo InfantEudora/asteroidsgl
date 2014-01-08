@@ -28,8 +28,68 @@ class Object;
 class Smoke;
 class Asteroid;
 
+class Ball{
+public:
+	Ball();
+	~Ball();
+	void init_resources(GLint program);
+	void render();
+
+	
+	GLint position;
+	GLint location;
+	GLint rotation;
+	GLint color;
+
+	float orientation;
+
+	GLfloat g_vertex_buffer_data[10];
+	GLushort g_element_buffer_data[5];
+
+	GLuint vertex_buffer, element_buffer;
+
+	float color4[4];				//Ship color
+
+	int rndcnt;						//A counter
+
+	GLint program;	
+};
 
 
+
+/* 
+	Manages objects... duh.
+
+	Basically handles the loading of everything, textures, locations etc.
+*/
+class ObjManager{
+public:
+	ObjManager();
+	~ObjManager();
+
+	void init();
+	void init_shaders();
+
+	GLuint make_shader(GLenum type, char *filename);
+	GLuint make_program(GLuint vertex_shader, GLuint fragment_shader);
+
+	void render();
+
+	void Rotate(float,float);
+
+	GLuint vertex_shader;
+	GLuint fragment_shader;
+	GLuint shader_program;
+
+	GLuint scale;
+
+
+	GLfloat position[6];
+
+private:
+	//This one's got balls.
+	Ball ball;
+};
 
 class Object{
 public:

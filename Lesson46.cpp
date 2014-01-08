@@ -121,6 +121,9 @@ Thread thread_physics;
 static BOOL g_isProgramLooping;											// Window Creation Loop, For FullScreen/Windowed Toggle																		// Between Fullscreen / Windowed Mode
 static BOOL g_createFullScreen;											// If TRUE, Then Create Fullscreen
 
+//Object manager
+ObjManager obj_man;
+
 
 //Network
 #if COMPILE_NETWORK
@@ -624,6 +627,8 @@ void load(){
 	net_man.startup();
 	#endif
 
+	
+
 	//Init everything.
 	Smoke::init();
 	Crate::init();
@@ -677,6 +682,9 @@ void load(){
 void startup(){	
 	BuildFont(g_window->hDC,g_window->hWnd);
 	EnableVerticalSync(false);	
+
+	//Object manager.
+	obj_man.init();
 }
 
 // Program Entry (WinMain)
@@ -990,6 +998,7 @@ void handle_input(float tusec){
 	//Left
 	if(g_keys->keyDown[VK_NUMPAD2] == TRUE){
 		player[0].ship.RotateImpulse(.3,tusec);	
+		obj_man.Rotate(.3,tusec);	
 	}
 	if(g_keys->keyDown[VK_LEFT] == TRUE){
 		player[0].ship.RotateImpulse(.3,tusec);	
@@ -998,7 +1007,8 @@ void handle_input(float tusec){
 
 	//Right
 	if(g_keys->keyDown[VK_RETURN] == TRUE){
-		player[0].ship.RotateImpulse(-.3,tusec);	
+		player[0].ship.RotateImpulse(-.3,tusec);
+		obj_man.Rotate(-.3,tusec);	
 	}
 	if(g_keys->keyDown[VK_RIGHT] == TRUE){
 		player[0].ship.RotateImpulse(-.3,tusec);	
@@ -1146,7 +1156,7 @@ void Update(){
 	timer_physics.start();
 	timer_loop.start();
 	
-	printf("tusec: %6.1f tslept %6.1f\n",tusec,t_slept);
+	//printf("tusec: %6.1f tslept %6.1f\n",tusec,t_slept);
 
 	for (int i=0;i<num_players;i++){
 		player[i].DoPhysics(tusec);	
@@ -1450,6 +1460,7 @@ void DrawOSD(void){
 	glBlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);
 	glDisable(GL_DEPTH_TEST);
 
+	
 	//Scale
 	glTranslatef(0,0,-2);
 	float scale = 1/20.0f;
@@ -1518,8 +1529,16 @@ void DrawSide(void){
 	glScalef(aspect,-1,1);
 	glTranslatef(-1,-1,-1.72);
 	
-	
-	
+	/*
+	glMatrixMode(GL_PROJECTION);     // Make a simple 2D projection on the entire window
+    glLoadIdentity();
+    glOrtho(0.0,1000, 1000, 0.0, 0.0, 100.0);
+	glMatrixMode(GL_MODELVIEW);    // Set the matrix mode to object modeling
+ 
+     glClearColor(0.0f, 0.0f, 0.0f, 0.0f); 
+     glClearDepth(0.0f);
+     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); // Clear the window
+	*/
 	
 	glScalef(2.0f/(float)(screen_w),2.0f/(float)(screen_h),1);
 
@@ -1600,10 +1619,7 @@ void DrawSide(void){
 	
 }
 
-void load_shader(){
-	GLuint shader = glCreateShader(GL_VERTEX_SHADER_ARB);
 
-} 
 
 
 void Draw(void)												// Draw The Scene
@@ -1640,6 +1656,8 @@ void Draw(void)												// Draw The Scene
 	glTranslatef(0,0,zoom);
 	glScalef(0.15,0.15,1);
 
+	//obj_man.render();
+
 	//This'll make you seasick.
 	//glRotatef(-player[0].ship.angledeg,0,0,1);	
 	
@@ -1657,6 +1675,7 @@ void Draw(void)												// Draw The Scene
 		crate[i].Render(player[0].ship.position);
 	}
 	
+	
 	//Render Smoke
 	Smoke::PreRender();
 	for(int i=0;i<num_smoke;i++){
@@ -1665,9 +1684,12 @@ void Draw(void)												// Draw The Scene
 		
 	glPopMatrix();
 	
-	
+	obj_man.render();
+
 	DrawSide();
 	DrawOSD();
+
+	
 	
 	//glFlush ();													// Flush The GL Rendering Pipeline
 	
