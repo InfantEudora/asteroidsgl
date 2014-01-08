@@ -992,7 +992,15 @@ void handle_input(float tusec){
 	}
 
 	if(g_keys->keyDown ['T'] == TRUE){
-		printf("Timer: %f usec.\n",tusec);
+		printf("Loop Time     : %6.0f (%6.0f)\n",cnt_loop.last,t_target);
+		printf(" Physics Time : %6.0f\n",cnt_physics.last);
+		printf(" Physics Idle : %6.0f\n",cnt_idle.last);
+		printf(" Render Time  : %6.0f\n",cnt_render.last);
+
+		//looptime
+		float fps = 1000000/(cnt_fps.last);
+
+		printf("FPS          : %6.2f\n",fps);
 	}
 
 	//Left
@@ -1161,6 +1169,8 @@ void Update(){
 	for (int i=0;i<num_players;i++){
 		player[i].DoPhysics(tusec);	
 	}
+
+	obj_man.doPhysics();
 
 	int bound = 75;
 	int bound_hyst = 5;
@@ -1652,12 +1662,12 @@ void Draw(void)												// Draw The Scene
 		
 	glPushMatrix();
 	
-	background.Render(player[0].ship.position);
+	//background.Render(player[0].ship.position);
 	glTranslatef(0,0,zoom);
 	glScalef(0.15,0.15,1);
 
-	//obj_man.render();
-
+	obj_man.render();
+	/*
 	//This'll make you seasick.
 	//glRotatef(-player[0].ship.angledeg,0,0,1);	
 	
@@ -1681,13 +1691,13 @@ void Draw(void)												// Draw The Scene
 	for(int i=0;i<num_smoke;i++){
 		smoke[i].Render(player[0].ship.position);
 	}
-		
+		*/
 	glPopMatrix();
 	
-	obj_man.render();
+	//obj_man.render();
 
-	DrawSide();
-	DrawOSD();
+	//DrawSide();
+	//DrawOSD();
 
 	
 	

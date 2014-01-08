@@ -68,20 +68,58 @@ public:
 	~ObjManager();
 
 	void init();
+	void init_textures();
 	void init_shaders();
 
 	GLuint make_shader(GLenum type, char *filename);
 	GLuint make_program(GLuint vertex_shader, GLuint fragment_shader);
 
+	//Always the same square.
+	GLfloat g_vertex_data[8];
+	GLfloat g_texture_data[8];
+
+	//An array of indices... which are also the same.
+	GLushort g_element_data[5];
+
+	int num_balls;
+	GLfloat b_position[10000];
+	GLfloat b_rotation[5000];
+	GLfloat b_size[5000];
+
+	//And the buffers that go with it.
+	GLuint vertex_buffer;
+	GLuint element_buffer;
+	GLuint text_buffer;
+	
+	GLfloat color4[4];
+	float orientation;
+
+	//Shader arguments
+	GLint va_position;
+	GLint va_location;
+	GLint va_rotation;	
+	GLint va_color;
+	GLint va_zoom;
+
+	GLuint va_scale;
+
+
 	void render();
+	void _render();
+	void doPhysics();
 
 	void Rotate(float,float);
 
+	//Compiled Shaders
 	GLuint vertex_shader;
 	GLuint fragment_shader;
 	GLuint shader_program;
 
-	GLuint scale;
+	
+	//Textures
+	int num_textures;
+	GLuint texture;
+	uint8_t texture_data[TGA_SIZE_256];	
 
 
 	GLfloat position[6];

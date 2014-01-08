@@ -215,6 +215,12 @@ float whatvect_abs(vect2* a, vect2* b)
 	 // vertex buffer
 	vertex_buffer = make_buffer(GL_ARRAY_BUFFER,
 			g_vertex_buffer_data, sizeof(g_vertex_buffer_data));
+
+	
+	
+	
+	
+
 	// element buffer
 	element_buffer = make_buffer(GL_ELEMENT_ARRAY_BUFFER,
 			g_element_buffer_data, sizeof(g_vertex_buffer_data));
@@ -232,11 +238,36 @@ float whatvect_abs(vect2* a, vect2* b)
 	
  }
 
+ void ObjManager::doPhysics(){
+	 for(int i =0;i<num_balls;i++){
+		b_rotation[i] = rand()%360;
+	}
+ }
+
 ObjManager::ObjManager(){
 	//Coordinates for balls.
-	GLfloat b_position[] = {1,1,0,0,-1,-1};
+	num_balls = 2500;
+	for(int i =0;i<num_balls*2;i++){
+		b_position[i] = (rand()%10000-5000)/500.0f;
+	}
 
-	GLfloat b_rotation[] = {10,-40,50};
+	//Orientation for the balls.
+	for(int i =0;i<num_balls;i++){
+		b_rotation[i] = rand()%360;
+		b_size[i] = (rand()%100+10)/1000.0f;
+	}
+
+	//Just a square.
+	//GLfloat g_vertex_data[8] = {-1,-1,-1,1,1,1,1,-1};
+
+
+	color4[0] = 1;
+	color4[1] = 1;
+	color4[2] = 1;
+	color4[3] = 1;
+
+	orientation = 0;
+
 
 };
 ObjManager::~ObjManager(){};
@@ -244,6 +275,19 @@ ObjManager::~ObjManager(){};
 
 void ObjManager::init(){
 	init_shaders();
+	init_textures();
+}
+
+void ObjManager::init_textures(){
+	//Generate texture
+	LoadFileTGA("bitmaps/ball.tga",texture_data, TGA_SIZE_256);
+
+	glGenTextures(1, &texture);
+	glBindTexture(GL_TEXTURE_2D, texture);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 256, 256, 0, GL_BGRA, GL_UNSIGNED_BYTE, texture_data);
+
+	glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR); // Linear Filtering
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR); // Linear Filtering
 }
 
 void ObjManager::init_shaders(){
@@ -258,7 +302,43 @@ void ObjManager::init_shaders(){
 		printf("Failed to create shader_program.\n");		
 	}
 
-	ball.init_resources(shader_program);
+	//ball.init_resources(shader_program);
+
+
+	GLfloat g_vertex_data[8] = {-1,-1,-1,1,1,1,1,-1};
+	GLfloat g_texture_data[8] = {0,0,0,1,1,0,1,1};
+
+	//Index pointers to the square.
+	GLushort g_element_data[4] = {0,1,3,2};
+
+	////////////////From here
+	
+
+	 // vertex buffer
+	glGenBuffersARB(1, &vertex_buffer);
+	glBindBufferARB(GL_ARRAY_BUFFER_ARB,vertex_buffer);
+	glBufferDataARB(GL_ARRAY_BUFFER_ARB,sizeof(g_vertex_data),g_vertex_data,GL_STATIC_DRAW);
+
+	// element buffer
+	glGenBuffersARB(1, &element_buffer);
+	glBindBufferARB(GL_ELEMENT_ARRAY_BUFFER_ARB,element_buffer);
+	glBufferDataARB(GL_ELEMENT_ARRAY_BUFFER_ARB,sizeof(g_element_data),g_element_data,GL_STATIC_DRAW);
+
+	// text buffer
+	glGenBuffersARB(1, &text_buffer);
+	glBindBufferARB(GL_ARRAY_BUFFER_ARB,text_buffer);
+	glBufferDataARB(GL_ARRAY_BUFFER_ARB,sizeof(g_texture_data),g_texture_data,GL_STATIC_DRAW);
+
+	// vertex shader arguments
+	va_scale = glGetUniformLocation (shader_program, "size");
+	va_position = glGetAttribLocation(shader_program, "position");	
+	va_rotation = glGetUniformLocation(shader_program, "Angle");
+	va_location = glGetUniformLocation(shader_program, "offset");
+
+	va_zoom = glGetUniformLocation(shader_program, "zoom");
+
+	//Fragent shader.
+	va_color = glGetUniformLocation(shader_program, "color");	
 } 
 
 GLuint ObjManager::make_shader(GLenum type, char *filename) {
@@ -300,41 +380,111 @@ GLuint ObjManager::make_program(GLuint vertex_shader, GLuint fragment_shader) {
         //show_info_log(program, glGetProgramiv, glGetProgramInfoLog);
         glDeleteProgram(program);
         return 0;
-	}
-
-	scale = glGetUniformLocation (shader_program, "scale");
+	}	
 
 	return program;
 }
 
 void ObjManager::Rotate(float by, float t){
-
-	this->ball.orientation += by;
+	orientation += by;
+	//	this->ball.orientation += by;
 }
+
+
+void ObjManager::_render(void){
+}
+
 
 void ObjManager::render(void){
 	
 
     glClearColor(0.15f, 0.15f, 0.15f, 1.0f);
 	glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);
-
+	//glEnableClientState( GL_ELEMENT_ARRAY_BUFFER_ARB );	
 	glUseProgram(shader_program);
 
-	//glEnable(GL_BLEND);
-	//glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-	//glEnable(GL_LINE_SMOOTH);
-	//glEnable(GL_LINE_SMOOTH_HINT);
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+	glEnable(GL_LINE_SMOOTH);
+	glEnable(GL_LINE_SMOOTH_HINT);
 	/*
 	glMatrixMode (GL_PROJECTION);										// Select The Projection Matrix
 	glLoadIdentity ();													// Reset The Projection Matrix
-	gluPerspective(45, 1, 1,  100);
+	gluPerspective(45, 0.5, 1,  100);
 	glMatrixMode (GL_MODELVIEW);										// Select The Modelview Matrix
 	glLoadIdentity ();	
 	*/
-	glUniform1f(scale, 1.0f/100.0f);
 
-	ball.render();
 
+	
+
+	//ball.render();
+	
+
+	//Render sqares....
+
+	glEnableClientState(GL_VERTEX_ARRAY);
+	//glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+
+	glUniform2f(va_location, 1,0);
+	glUniform1f(va_rotation, orientation);
+	glUniform1f(va_zoom, 0.1f);
+
+	glUniform4f(va_color, color4[0], color4[1], color4[2], color4[3]);
+	
+	glBindBuffer(GL_ARRAY_BUFFER_ARB, vertex_buffer);
+	glEnableVertexAttribArray(va_position);	
+	glVertexAttribPointer( va_position,
+				2,                             
+				GL_FLOAT,                         
+				GL_FALSE,                        
+				sizeof(GLfloat)*2,               
+				(void*)0);
+	/*
+	glBindTexture(GL_TEXTURE_2D, texture);
+	glBindBuffer(GL_ARRAY_BUFFER_ARB, text_buffer);
+	glTexCoordPointer(2,                             
+				GL_FLOAT,                         
+				GL_FALSE,                        
+				g_texture_data);
+
+	*/
+	/*
+	glActiveTextureARB(GL_TEXTURE0_ARB);
+	glBindTexture(GL_TEXTURE_2D, texture);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 256, 256, 0, GL_BGRA, GL_UNSIGNED_BYTE, texture_data);
+	*/
+
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER_ARB, element_buffer);	
+	for(int i =0;i<num_balls;i++){
+		
+		glUniform2f(va_location, b_position[0+i],b_position[1+i]);
+		glUniform1f(va_rotation, b_rotation[i]);
+		glUniform1f(va_scale, b_size[i]);
+		glDrawElements(
+			GL_TRIANGLE_STRIP,
+			4,
+			GL_UNSIGNED_SHORT,
+			(void*)0          
+		);
+	}
+	
+
+	
+
+	//glDrawArrays(GL_LINE_STRIP,0,5);
+
+	glDisableVertexAttribArray(va_position);
+	/*
+	glBegin(GL_QUADS);		
+		glColor4f(1,1,1,1);
+		glTexCoord2f(0,0);		glVertex3f(-1, -1, 0.0f);
+		glTexCoord2f(1.0, 0);	glVertex3f(1.0, -1, 0.0f);
+		glTexCoord2f(1.0, 1.0);glVertex3f(1.0, 1.0, 0.0f);
+		glTexCoord2f(0, 1.0);	glVertex3f(-1, 1.0, 0.0f);		
+	glEnd();*/
+	glDisableClientState(GL_VERTEX_ARRAY);
+	glDisableClientState(GL_TEXTURE_COORD_ARRAY);	
 
 	glUseProgram(0);
 }
