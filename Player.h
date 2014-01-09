@@ -50,6 +50,8 @@ public:
 	float mass;
 	vect2 momentum;
 	vect2 velocity;
+
+	float drot;
 };
 
 
@@ -77,7 +79,7 @@ public:
 	GLuint make_program(GLuint vertex_shader, GLuint fragment_shader);
 
 	
-	#define MAX_NUM_OBJ 500
+	#define MAX_NUM_OBJ 200
 
 	//Always the same square.
 	GLfloat g_vertex_data[8*MAX_NUM_OBJ];

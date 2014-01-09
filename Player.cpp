@@ -168,13 +168,16 @@ bool inrange_cube(vect2* a, vect2* b, float* size_a, float* size_b){
 	 //momentum.x =1;
 	 //momentum.y =1;
 
-	 mass = 10;
+	 mass = 15;
 
 	 //position->x = 0;
 	 //position->y = 0;
 
 	 *rotation = 1;
+	 drot =  ((rand()%500)+500)/10000.0f;
+
 	 *size = ((rand()%500)+500)/1000.0f;
+	 //*size = 1;
  }
 
  /*
@@ -196,7 +199,7 @@ bool inrange_cube(vect2* a, vect2* b, float* size_a, float* size_b){
 	(*position).x += dt*velocity.x*0.04f;
 	(*position).y += dt*velocity.y*0.04f;
 
-	*rotation += 0.1f;
+	*rotation +=drot;
 
  }
 
@@ -219,49 +222,107 @@ bool inrange_cube(vect2* a, vect2* b, float* size_a, float* size_b){
 
 	//Check collision.
 	for (int i=0;i<num_balls;i++){
+		object[i].doObjPhysics(ticks);
 		for (int r=i+1;r<num_balls;r++){
 			if (object[i].checkCollision(&object[r])){
+				
 				//The difference in position.
-				vect2 dpos = vect_diff(object[r].position,object[i].position);
-
-				//dpos.x = 0;
-				//dpos.y = 1;
-
+				vect2 dpos = vect_diff(object[i].position,object[r].position);
+								
 				//If the radiusses overlap:
 				//Vector suare of the distance.
-				float dposabs = vect_abs(&dpos);
-				float rsizeabs = *(object[r].size);
-				float isizeabs = *(object[i].size);
+				float dposabs = vect_abs(&dpos);				
 
-				dposabs -= (rsizeabs/2); //Thsi would be the radius.
-				dposabs -= (isizeabs/2);
-				if (dposabs< 0){
-					//Get a unit vector of the difference.
-					vect2 dposunit = vect_unit(&dpos);
-
-					//float isr = (*object[i].size)/2;
-					dposunit = vect_scale(&dposunit,dposabs);
-
-
-					//Offset the object.
-					//(*object[i].position).x = (*object[r].position).x;
-					//(*object[i].position).y = (*object[r].position).y;
-
+				float overlap = dposabs;
+				overlap -= (*(object[r].size)/2); //This would be the radius.
+				overlap -= (*(object[i].size)/2);
 				
-					(*object[r].position).x -= dposunit.x/2;
-					(*object[r].position).y -= dposunit.y/2;
-					(*object[i].position).x += dposunit.x/2;
-					(*object[i].position).y += dposunit.y/2;
+				if (overlap< 0){
+					//Their radiusses overlap. dposabs is the length of overlap.
+					vect2 unit = vect_unit(&dpos);
+
+					//Get a unit vector of the difference.
+					vect2 displace = vect_scale(&unit,abs(overlap/2));
+							
+					//Apply displacement
+					/*
+					if ((*object[r].position).x < (*object[i].position).x){
+						(*object[r].position).x += displace.x;
+						(*object[i].position).x -= displace.x;
+					}else{
+						(*object[r].position).x -= displace.x;
+						(*object[i].position).x += displace.x;
+					}
+					if ((*object[r].position).y < (*object[i].position).y){
+						(*object[r].position).y += displace.y;
+						(*object[i].position).y -= displace.y;
+					}else{
+						(*object[r].position).y -= displace.y;
+						(*object[i].position).y += displace.y;
+					}*/
+
+					
+					(*object[r].position).x -= displace.x;
+					(*object[r].position).y -= displace.y;
+					(*object[i].position).x += displace.x;
+					(*object[i].position).y += displace.y;
+					
+					/*	
+						In a perfectly elastic collision, kinetic energy is conserved.
+						In a perfectly inelastic collision, the momentum is conseverd.
+
+						I.e. 
+					*/
+					/*
+					object[r].momentum.x = -object[r].momentum.x;
+					object[r].momentum.y = -object[r].momentum.y;
+
+					object[i].momentum.x = -object[i].momentum.x;
+					object[i].momentum.y = -object[i].momentum.y;
+					*/
+
+					//Set their velocity based on angle of collision:
+
+
 				}
 			}
 		}
 
-		//Check 
+		//Check bounds
+		int bound = 15.0f;
+		int bound_hyst = 0;
+
+		/*
+		if ((*object[i].position).x > (bound)){
+			(*object[i].position).x = -(bound);
+		}
+		if ((*object[i].position).x < -(bound+bound_hyst)){
+			(*object[i].position).x = +(bound-bound_hyst);	
+		}
+		if ((*object[i].position).y > (bound+bound_hyst)){
+			(*object[i].position).y = -(bound-bound_hyst);	
+		}
+		if ((*object[i].position).y < -(bound)){
+			(*object[i].position).y = (bound);	
+		}*/
+		
+		if ((*object[i].position).x > (bound)){
+			object[i].momentum.x = -1 * abs(object[i].momentum.x);
+		}
+		if ((*object[i].position).x < -(bound)){
+			object[i].momentum.x = 1 * abs(object[i].momentum.x);
+		}
+		if ((*object[i].position).y > (bound)){
+			object[i].momentum.y = -1 * abs(object[i].momentum.y);	
+		}
+		if ((*object[i].position).y < -(bound)){
+			object[i].momentum.y = 1 * abs(object[i].momentum.y);
+		}
 	}
 
-	//Do obj.
+	//Do obj physics, and update vertext data for rendering.
 	for (int i=0;i<num_balls;i++){
-		object[i].doObjPhysics(ticks);
+		
 
 		//Copy vertex data.		
 		g_vertex_location[(8*i)+2] = g_vertex_location[(8*i)+0];
@@ -344,10 +405,10 @@ ObjManager::ObjManager(){
 		g_vertex_rotation[(4*i)+3] = 0;
 
 
-		g_vertex_size[(4*i)+0] = .5;
-		g_vertex_size[(4*i)+1] = .5;
-		g_vertex_size[(4*i)+2] = .5;
-		g_vertex_size[(4*i)+3] = .5;
+		g_vertex_size[(4*i)+0] = 1;
+		g_vertex_size[(4*i)+1] = 1;
+		g_vertex_size[(4*i)+2] = 1;
+		g_vertex_size[(4*i)+3] = 1;
 
 	}
 
@@ -364,6 +425,32 @@ ObjManager::ObjManager(){
 		ptr_rotmem += 4;
 		ptr_sizemem += 4;
 	}
+
+	//Test
+	
+	(*object[0].position).x = -2;
+	(*object[0].position).y = -2;
+	object[0].momentum.x = 10;
+	object[0].momentum.y = 10;
+
+	(*object[1].position).x = 2;
+	(*object[1].position).y = 0;
+
+	object[1].momentum.x = -sqrtf(100);
+	object[1].momentum.y = 0;
+	
+	/*
+	(*object[0].position).x = -0.38234267;
+	(*object[0].position).y = -0.38234267;
+	object[0].momentum.x = 0;
+	object[0].momentum.y = 0;
+
+	(*object[1].position).x = 0.46234307;
+	(*object[1].position).y = 0;
+
+	object[1].momentum.x = 0;
+	object[1].momentum.y = 0;
+	*/
 };
 ObjManager::~ObjManager(){};
 
@@ -524,7 +611,8 @@ void ObjManager::render(void){
 	glEnd();
 	glPopMatrix();
 
-
+	
+	
 	//Normal-ish.
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 	glUseProgram(shader_program);
@@ -614,11 +702,16 @@ void ObjManager::render(void){
 			GL_UNSIGNED_SHORT,
 			(void*)0          
 		);*/
-	
 	glBindBuffer(GL_ARRAY_BUFFER_ARB, vertex_buffer);
-	//for(int i =0;i<num_balls;i++){
-		glDrawArrays(GL_QUADS,0,4*num_balls);
-	//}
+
+	//0th ball is green
+	glUniform4f(va_color,.5,1,.5,1);		
+	glDrawArrays(GL_QUADS,0,4);
+
+	//The rest is normal
+	glUniform4f(va_color,1,1,1,1);		
+	glDrawArrays(GL_QUADS,4,4*(num_balls-1));
+
 	/*
 	 glBindTexture(GL_TEXTURE_2D, textures[0]);
 	for(int i =50;i<100;i++){
