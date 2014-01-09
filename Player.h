@@ -29,39 +29,40 @@ class Object;
 class Smoke;
 class Asteroid;
 
-class Ball{
+
+class Obj;
+
+class Obj{
+
 public:
-	Ball();
-	~Ball();
-	void init_resources(GLint program);
-	void render();
+	Obj();
+	~Obj();
+	void init(vect2* pos, float* rot, float* size);
+	void doObjPhysics(float ticks);
+	bool checkCollision(Obj* obj);
 
-	
-	GLint position;
-	GLint location;
-	GLint rotation;
-	GLint color;
+	//Pinters to global memory.
+	vect2* position;
+	float* rotation;
+	float* size;
 
-	float orientation;
 
-	GLfloat g_vertex_buffer_data[10];
-	GLushort g_element_buffer_data[5];
-
-	GLuint vertex_buffer, element_buffer;
-
-	float color4[4];				//Ship color
-
-	int rndcnt;						//A counter
-
-	GLint program;	
+	float mass;
+	vect2 momentum;
+	vect2 velocity;
 };
-
 
 
 /* 
 	Manages objects... duh.
 
 	Basically handles the loading of everything, textures, locations etc.
+
+	Every object's coordinates, orientation and size are stored in a few VBOs.
+	Since evety object is drawn as a sprite on a sqare, they all have a -1 to +1 sqare with a 0-1 texture.
+
+	They're drawn as quads, so each vertex needs coordinate data, orientation data.
+
 */
 class ObjManager{
 public:
@@ -76,14 +77,16 @@ public:
 	GLuint make_program(GLuint vertex_shader, GLuint fragment_shader);
 
 	
-	#define MAX_NUM_OBJ 1500
+	#define MAX_NUM_OBJ 500
 
 	//Always the same square.
 	GLfloat g_vertex_data[8*MAX_NUM_OBJ];
 
 
-	GLfloat g_vertex_location[8*MAX_NUM_OBJ];
-	GLfloat g_vertex_rotation[8*MAX_NUM_OBJ];
+	GLfloat g_vertex_location[8*MAX_NUM_OBJ];	
+
+	GLfloat g_vertex_size[4*MAX_NUM_OBJ];
+	GLfloat g_vertex_rotation[4*MAX_NUM_OBJ];
 
 	//An array of indices... which are also the same.
 	//GLushort g_element_data[6*1000];
@@ -101,6 +104,7 @@ public:
 	GLuint vertex_buffer;
 	GLuint rotation_buffer;
 	GLuint location_buffer;
+	GLuint size_buffer;
 	
 	GLfloat color4[4];
 
@@ -121,7 +125,7 @@ public:
 
 	void render();
 	void _render();
-	void doPhysics();
+	void doPhysics(float);
 
 	void Rotate(float,float);
 
@@ -140,9 +144,10 @@ public:
 
 	GLfloat position[6];
 
+	Obj object[MAX_NUM_OBJ];
+
 private:
-	//This one's got balls.
-	Ball ball;
+	
 };
 
 class Object{

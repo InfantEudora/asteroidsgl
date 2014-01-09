@@ -2,7 +2,7 @@
 
 attribute  vec2 position;	//It's own position offset.
 
-uniform float size;			//Size of object.
+attribute float size;			//Size of an object. Since we draw from -1 to 1, div. by 2.
 attribute float Angle;		//It's orientation
 attribute  vec2 offset;		//It's world coordinate offset.
 uniform float zoom;			//Zzooom
@@ -14,8 +14,8 @@ varying vec2 texcoord;
 void main()
 {	
 
-	float cosa = cos(Angle)*size*zoom;
-	float sina = sin(Angle)*size*zoom;
+	float cosa = cos(Angle)*size*2.0*zoom;
+	float sina = sin(Angle)*size*2.0*zoom;
 
 	//gl_TexCoord[0] = gl_MultiTexCoord0;
 
