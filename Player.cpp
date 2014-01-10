@@ -247,22 +247,7 @@ bool inrange_cube(vect2* a, vect2* b, float* size_a, float* size_b){
 					//Get a unit vector of the difference.
 					vect2 displace = vect_scale(&unit,abs(overlap/2));
 							
-					//Apply displacement
-					/*
-					if ((*object[r].position).x < (*object[i].position).x){
-						(*object[r].position).x += displace.x;
-						(*object[i].position).x -= displace.x;
-					}else{
-						(*object[r].position).x -= displace.x;
-						(*object[i].position).x += displace.x;
-					}
-					if ((*object[r].position).y < (*object[i].position).y){
-						(*object[r].position).y += displace.y;
-						(*object[i].position).y -= displace.y;
-					}else{
-						(*object[r].position).y -= displace.y;
-						(*object[i].position).y += displace.y;
-					}*/
+					//Apply a 50/50 displacement to both objects.
 
 					
 					(*object[r].position).x -= displace.x;
