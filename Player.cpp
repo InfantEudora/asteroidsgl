@@ -238,6 +238,9 @@ bool inrange_cube(vect2* a, vect2* b, float* size_a, float* size_b){
 				overlap -= (*(object[i].size)/2);
 				
 				if (overlap< 0){
+					if (i==0){
+						i = 0;
+					}
 					//Their radiusses overlap. dposabs is the length of overlap.
 					vect2 unit = vect_unit(&dpos);
 
@@ -280,16 +283,43 @@ bool inrange_cube(vect2* a, vect2* b, float* size_a, float* size_b){
 					object[i].momentum.x = -object[i].momentum.x;
 					object[i].momentum.y = -object[i].momentum.y;
 					*/
-
+					
 					//Set their velocity based on angle of collision:
+					float ang_impi = atan2(object[i].momentum.y,object[i].momentum.x);
+					float ang_norm = atan2(dpos.y,dpos.x)+(PI/2);
+					
+					float ang_dif = -2*(ang_impi - ang_norm);
+					//ang_dif -= (PI/2);
+					
+					
+					//object[r].momentum.x = object[r].momentum.x * sinf(ang_dif);
+					//object[r].momentum.y = object[r].momentum.y * -cosf(ang_dif);
 
+					vect2 mom = object[i].momentum;
 
+					object[i].momentum.x = (mom.x * cosf(ang_dif)) - (mom.y * sinf(ang_dif));
+					object[i].momentum.y = (mom.x * sinf(ang_dif))+ (mom.y * cosf(ang_dif)) ;
+					
+					//object[r].momentum.x =0;
+					//object[r].momentum.y =0;
+					
+					
+					float ang_impr = atan2(object[r].momentum.y,object[r].momentum.x);
+					ang_norm = atan2(dpos.y,dpos.x)+(PI/2);
+				
+					ang_dif =-2*(ang_impr - ang_norm);
+					//ang_dif -= (PI/2);
+
+					mom = object[r].momentum;
+
+					object[r].momentum.x = (mom.x * cosf(ang_dif)) - (mom.y * sinf(ang_dif));
+					object[r].momentum.y = (mom.x * sinf(ang_dif))+ (mom.y * cosf(ang_dif)) ;
 				}
 			}
 		}
 
 		//Check bounds
-		int bound = 15.0f;
+		int bound = 10.0f;
 		int bound_hyst = 0;
 
 		/*
@@ -371,7 +401,7 @@ ObjManager::ObjManager(){
 	color4[3] = 1;
 
 	orientation = 0;
-	zoom = 1;
+	zoom = .2;
 
 	 b_position[0] =.1;
 	 b_position[1] =.1;
@@ -426,31 +456,38 @@ ObjManager::ObjManager(){
 		ptr_sizemem += 4;
 	}
 
-	//Test
-	
-	(*object[0].position).x = -2;
-	(*object[0].position).y = -2;
-	object[0].momentum.x = 10;
-	object[0].momentum.y = 10;
-
-	(*object[1].position).x = 2;
-	(*object[1].position).y = 0;
-
-	object[1].momentum.x = -sqrtf(100);
-	object[1].momentum.y = 0;
-	
-	/*
-	(*object[0].position).x = -0.38234267;
-	(*object[0].position).y = -0.38234267;
+	//Test 5 balls.
+	(*object[0].size) = 2;
+	(*object[0].position).x = 0;
+	(*object[0].position).y = 0;
 	object[0].momentum.x = 0;
 	object[0].momentum.y = 0;
 
-	(*object[1].position).x = 0.46234307;
-	(*object[1].position).y = 0;
+	(*object[1].size) = 1;
+	(*object[1].position).x = 5;
+	(*object[1].position).y = 2;
+	object[1].momentum.x = -5;
+	object[1].momentum.y = -1;
 
-	object[1].momentum.x = 0;
-	object[1].momentum.y = 0;
-	*/
+	(*object[2].size) = 1;
+	(*object[2].position).x = -2;
+	(*object[2].position).y = 5;
+	object[2].momentum.x = 1;
+	object[2].momentum.y = -5;
+
+	(*object[3].size) = 1;
+	(*object[3].position).x = -2;
+	(*object[3].position).y = -2;
+	object[3].momentum.x = 5;
+	object[3].momentum.y = 5;
+
+	(*object[4].size) = 1;
+	(*object[4].position).x = 2;
+	(*object[4].position).y = -2;
+	object[4].momentum.x = -5;
+	object[4].momentum.y = 5;
+
+	
 };
 ObjManager::~ObjManager(){};
 

@@ -79,7 +79,7 @@ public:
 	GLuint make_program(GLuint vertex_shader, GLuint fragment_shader);
 
 	
-	#define MAX_NUM_OBJ 200
+	#define MAX_NUM_OBJ 300
 
 	//Always the same square.
 	GLfloat g_vertex_data[8*MAX_NUM_OBJ];
