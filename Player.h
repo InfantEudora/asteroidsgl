@@ -38,6 +38,7 @@ public:
 	Obj();
 	~Obj();
 	void init(vect2* pos, float* rot, float* size);
+	void updateMomentum(void);
 	void doObjPhysics(float ticks);
 	bool checkCollision(Obj* obj);
 
@@ -79,7 +80,7 @@ public:
 	GLuint make_program(GLuint vertex_shader, GLuint fragment_shader);
 
 	
-	#define MAX_NUM_OBJ 300
+	#define MAX_NUM_OBJ 200
 
 	//Always the same square.
 	GLfloat g_vertex_data[8*MAX_NUM_OBJ];

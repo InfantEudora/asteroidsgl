@@ -107,6 +107,14 @@ vect2 vect_diff(vect2* a, vect2* b){
 	return t;
 }
 
+//Returns the sum of 2 vectors as a vector.
+vect2 vect_sum(vect2* a, vect2* b){
+	vect2 t;
+	t.x = a->x + b->x;
+	t.y = a->y + b->y;
+	return t;
+}
+
 //Reads a file and returns a pointer to newly allocated memory.
 void *file_contents(const char *filename, GLint *length){
     FILE *f = fopen(filename, "r");
@@ -154,31 +162,39 @@ bool inrange_cube(vect2* a, vect2* b, float* size_a, float* size_b){
 
  }
 
- void Obj::init(vect2* pos, float* rot, float* sz){
-	 position = pos;
-	 rotation = rot;
-	 size = sz;
+void Obj::init(vect2* pos, float* rot, float* sz){
+	position = pos;
+	rotation = rot;
+	size = sz;
 
-	 velocity.x = 0;
-	 velocity.y = 0;
+	velocity.x = 0;
+	velocity.y = 0;
 
-	 momentum.x = ((rand()%100)-50)/10.0f;
-	 momentum.y = ((rand()%100)-50)/10.0f;
+	momentum.x = ((rand()%100)-50)/10.0f;
+	momentum.y = ((rand()%100)-50)/10.0f;
 
-	 //momentum.x =1;
-	 //momentum.y =1;
+	//momentum.x =1;
+	//momentum.y =1;
 
-	 mass = 15;
+	mass = 15;
 
-	 //position->x = 0;
-	 //position->y = 0;
+	velocity.x = momentum.x / mass;
+	velocity.y = momentum.y / mass;
 
-	 *rotation = 1;
-	 drot =  ((rand()%500)+500)/10000.0f;
+	//position->x = 0;
+	//position->y = 0;
 
-	 *size = ((rand()%500)+500)/1000.0f;
-	 //*size = 1;
- }
+	*rotation = 1;
+	drot =  ((rand()%500)+500)/10000.0f;
+
+	*size = ((rand()%500)+500)/1000.0f;
+	//*size = 1;
+}
+
+void Obj::updateMomentum(void){
+	momentum.x = velocity.x * mass;
+	momentum.y = velocity.y * mass;
+}
 
  /*
 	Does physics that are appicable to any object.
@@ -187,9 +203,7 @@ bool inrange_cube(vect2* a, vect2* b, float* size_a, float* size_b){
  void Obj::doObjPhysics(float ticks){
 	 float dt = ticks/20000;
 
-	//Update position, rotation.
-	velocity.x = momentum.x / mass;
-	velocity.y = momentum.y / mass;
+	updateMomentum();
 
 	if (vect_abs_sqare(&velocity) > 100){
 		momentum.x = momentum.x / 2;
@@ -229,8 +243,7 @@ bool inrange_cube(vect2* a, vect2* b, float* size_a, float* size_b){
 				//The difference in position.
 				vect2 dpos = vect_diff(object[i].position,object[r].position);
 								
-				//If the radiusses overlap:
-				//Vector suare of the distance.
+				//If the radiusses overlap:				
 				float dposabs = vect_abs(&dpos);				
 
 				float overlap = dposabs;
@@ -247,58 +260,67 @@ bool inrange_cube(vect2* a, vect2* b, float* size_a, float* size_b){
 					//Get a unit vector of the difference.
 					vect2 displace = vect_scale(&unit,abs(overlap/2));
 							
-					//Apply a 50/50 displacement to both objects.
-
-					
+					//Apply a 50/50 displacement to both objects.					
 					(*object[r].position).x -= displace.x;
 					(*object[r].position).y -= displace.y;
 					(*object[i].position).x += displace.x;
 					(*object[i].position).y += displace.y;
 					
 					/*	
-						In a perfectly elastic collision, kinetic energy is conserved.
-						In a perfectly inelastic collision, the momentum is conseverd.
-
-						I.e. 
+					 In a perfectly elastic collision, kinetic energy is conserved.
+					 In a perfectly inelastic collision, the momentum is conseverd.
+					 First: They should bounce by leaving with the same angle as making contact:
 					*/
-					/*
-					object[r].momentum.x = -object[r].momentum.x;
-					object[r].momentum.y = -object[r].momentum.y;
-
-					object[i].momentum.x = -object[i].momentum.x;
-					object[i].momentum.y = -object[i].momentum.y;
-					*/
-					
+										
 					//Set their velocity based on angle of collision:
-					float ang_impi = atan2(object[i].momentum.y,object[i].momentum.x);
+					//i:
+					float ang_impi = atan2(object[i].velocity.y,object[i].velocity.x);
 					float ang_norm = atan2(dpos.y,dpos.x)+(PI/2);
 					
 					float ang_dif = -2*(ang_impi - ang_norm);
-					//ang_dif -= (PI/2);
-					
-					
-					//object[r].momentum.x = object[r].momentum.x * sinf(ang_dif);
-					//object[r].momentum.y = object[r].momentum.y * -cosf(ang_dif);
 
-					vect2 mom = object[i].momentum;
+					vect2 vel_ai = object[i].velocity;
+					vect2 vel_afu; //A's final momentum unit vector (direction).
 
-					object[i].momentum.x = (mom.x * cosf(ang_dif)) - (mom.y * sinf(ang_dif));
-					object[i].momentum.y = (mom.x * sinf(ang_dif))+ (mom.y * cosf(ang_dif)) ;
-					
-					//object[r].momentum.x =0;
-					//object[r].momentum.y =0;
-					
-					
-					float ang_impr = atan2(object[r].momentum.y,object[r].momentum.x);
+					object[i].velocity.x = (vel_ai.x * cosf(ang_dif)) - (vel_ai.y * sinf(ang_dif));
+					object[i].velocity.y = (vel_ai.x * sinf(ang_dif)) + (vel_ai.y * cosf(ang_dif));
+					//Create the unit vector.
+					vel_afu = vect_unit(&object[i].velocity);
+					//r:
+					float ang_impr = atan2(object[r].velocity.y,object[r].velocity.x);
 					ang_norm = atan2(dpos.y,dpos.x)+(PI/2);
 				
 					ang_dif =-2*(ang_impr - ang_norm);
-					//ang_dif -= (PI/2);
+				
+					vect2 vel_bi = object[r].velocity;
+					vect2 vel_bfu; //B's final momentum unit vector (direction).
 
-					mom = object[r].momentum;
+					object[r].velocity.x = (vel_bi.x * cosf(ang_dif)) - (vel_bi.y * sinf(ang_dif));
+					object[r].velocity.y = (vel_bi.x * sinf(ang_dif)) + (vel_bi.y * cosf(ang_dif));
+					//Create the unit vector.
+					vel_bfu = vect_unit(&object[r].velocity);
 
-					object[r].momentum.x = (mom.x * cosf(ang_dif)) - (mom.y * sinf(ang_dif));
-					object[r].momentum.y = (mom.x * sinf(ang_dif))+ (mom.y * cosf(ang_dif)) ;
+					/*
+					 These where actually just for getting their directions.
+					 Now we need to conserve the momentum: Pai + Pbi = Paf + Pbf
+					*/
+					vect2 vel_sumi = vect_sum(&vel_ai,&vel_bi);
+					float vel_sumi_abs = vect_abs(&vel_sumi);
+					float mass_tot = object[i].mass + object[r].mass;
+
+					/*
+					 Both objects get a fraction of the mommentum depending on their mass relation:
+					 Eg. if the mass is the same, both end up with the same speed.
+					 If a small moving object hits a big stationary one, the speed of the small object decreases significantly,
+					 while the big objects speed increases only slightly.
+					*/
+
+					//object[i].velocity = vect_scale(&vel_afu,(object[i].mass/mass_tot)*vel_sumi_abs);
+					//object[r].velocity = vect_scale(&vel_bfu,(object[r].mass/mass_tot)*vel_sumi_abs);
+
+					//object[i].updateMomentum();
+					//object[r].updateMomentum();
+
 				}
 			}
 		}
@@ -322,17 +344,18 @@ bool inrange_cube(vect2* a, vect2* b, float* size_a, float* size_b){
 		}*/
 		
 		if ((*object[i].position).x > (bound)){
-			object[i].momentum.x = -1 * abs(object[i].momentum.x);
+			object[i].velocity.x = -1 * abs(object[i].velocity.x);
 		}
 		if ((*object[i].position).x < -(bound)){
-			object[i].momentum.x = 1 * abs(object[i].momentum.x);
+			object[i].velocity.x = 1 * abs(object[i].velocity.x);
 		}
 		if ((*object[i].position).y > (bound)){
-			object[i].momentum.y = -1 * abs(object[i].momentum.y);	
+			object[i].velocity.y = -1 * abs(object[i].velocity.y);	
 		}
 		if ((*object[i].position).y < -(bound)){
-			object[i].momentum.y = 1 * abs(object[i].momentum.y);
+			object[i].velocity.y = 1 * abs(object[i].velocity.y);
 		}
+		object[i].updateMomentum();
 	}
 
 	//Do obj physics, and update vertext data for rendering.
@@ -442,36 +465,46 @@ ObjManager::ObjManager(){
 	}
 
 	//Test 5 balls.
-	(*object[0].size) = 2;
+	(*object[0].size) = 1;
+	object[0].mass = 1;
 	(*object[0].position).x = 0;
 	(*object[0].position).y = 0;
-	object[0].momentum.x = 0;
-	object[0].momentum.y = 0;
+	object[0].velocity.x = -1;
+	object[0].velocity.y = -1;
+	object[0].updateMomentum();  
 
 	(*object[1].size) = 1;
-	(*object[1].position).x = 5;
-	(*object[1].position).y = 2;
-	object[1].momentum.x = -5;
-	object[1].momentum.y = -1;
-
+	object[1].mass = 1;
+	(*object[1].position).x = 3;
+	(*object[1].position).y = 3;
+	object[1].velocity.x = -2;
+	object[1].velocity.y = -2;
+	object[1].updateMomentum();
+	/*
 	(*object[2].size) = 1;
+	object[2].mass = 1;
 	(*object[2].position).x = -2;
 	(*object[2].position).y = 5;
-	object[2].momentum.x = 1;
-	object[2].momentum.y = -5;
+	object[2].velocity.x = 1/10.0;
+	object[2].velocity.y = -5/10.0;
+	object[2].updateMomentum();
 
 	(*object[3].size) = 1;
+	object[3].mass = 1;
 	(*object[3].position).x = -2;
 	(*object[3].position).y = -2;
-	object[3].momentum.x = 5;
-	object[3].momentum.y = 5;
+	object[3].velocity.x = 5/10.0;
+	object[3].velocity.y = 5/10.0;
+	object[3].updateMomentum();
 
 	(*object[4].size) = 1;
+	object[4].mass = 1;
 	(*object[4].position).x = 2;
 	(*object[4].position).y = -2;
-	object[4].momentum.x = -5;
-	object[4].momentum.y = 5;
-
+	object[4].velocity.x = -8/10.0;
+	object[4].velocity.y = 0/10.0;
+	object[4].updateMomentum();
+	*/
 	
 };
 ObjManager::~ObjManager(){};
