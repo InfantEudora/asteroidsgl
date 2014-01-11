@@ -1,7 +1,7 @@
 #version 110 
 
 attribute  vec2 position;	//It's own position offset.
-
+uniform vec2 relative;		//Relative to something.
 attribute float size;		//Size of an object. Since we draw from -1 to 1, div. by 2.
 attribute float Angle;		//It's orientation
 attribute  vec2 offset;		//It's world coordinate offset.
@@ -39,8 +39,8 @@ void main()
 
 	rotated =  (position4*RotationMatrix);
 				          
-	//vec4 totalOffset = vec4(offset.x*zoom, offset.y*zoom, 0.0, 0.0);
-	vec4 totalOffset = vec4(offset.x*zoom, offset.y*zoom, 0.0, 0.0);
+	//vec4 totalOffset = vec4((offset.x)*zoom, (offset.y)*zoom, 0.0, 0.0);
+	vec4 totalOffset = vec4((offset.x+relative.x)*zoom, (offset.y+relative.y)*zoom, 0.0, 0.0);
 	
     gl_Position = rotated + totalOffset;
     

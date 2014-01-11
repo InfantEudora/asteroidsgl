@@ -51,6 +51,8 @@ public:
 	float mass;
 	vect2 momentum;
 	vect2 velocity;
+	vect2 acceleration;	
+	vect2 force;
 
 	float drot;
 };
@@ -80,7 +82,10 @@ public:
 	GLuint make_program(GLuint vertex_shader, GLuint fragment_shader);
 
 	
-	#define MAX_NUM_OBJ 200
+	#define MAX_NUM_OBJ 500
+
+
+
 
 	//Always the same square.
 	GLfloat g_vertex_data[8*MAX_NUM_OBJ];
@@ -118,6 +123,7 @@ public:
 	GLint va_position;
 	GLint va_location;
 	GLint va_rotation;	
+	GLint va_relative;	
 	GLint va_color;
 	GLint va_zoom;
 
@@ -131,7 +137,7 @@ public:
 	void doPhysics(float);
 
 	void Rotate(float,float);
-
+	void Move(float,float);
 	//Compiled Shaders
 	GLuint vertex_shader;
 	GLuint fragment_shader;

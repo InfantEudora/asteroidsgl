@@ -61,6 +61,8 @@ int sound_counter[4];
 #define ASTSND_SHIELD_HITS_PATH	"sounds/shield_short.wav"
 #define ASTSND_SHIELD_HITL_PATH	"sounds/shield_long.wav"
 #define ASTSND_WEAPON_PATH	"sounds/weapon1.wav"
+#define ASTSND_BOUNCE_PATH "sounds/boing.wav"
+
 #endif
 
 
@@ -93,7 +95,7 @@ int num_players = 10;
 Player player[10];
 Backdrop background;
 
-int num_asteroids = 1500;
+int num_asteroids = 0;
 Asteroid asteroid[1500];
 
 int num_smoke = 100;
@@ -908,6 +910,13 @@ void sound_init(void){
 	}
 	sound_counter[2] = 0;
 	 
+	for (int i=0;i<max_sounds;i++){
+		if (!buffer[3].loadFromFile(ASTSND_BOUNCE_PATH))
+			break;
+		sound[3][i].setBuffer(buffer[3]);
+		
+	}
+	sound_counter[3] = 0;
 }
 
 
@@ -1028,6 +1037,7 @@ void handle_input(float tusec){
 		//if (g_keys->keydown_time[VK_NUMPAD6] < 0){			
 			player[0].ship.Move(1,tusec);				
 			//g_keys->keydown_time[VK_NUMPAD6] = 50000;		
+			obj_man.Move(.5,tusec);	
 		//}		
 	}
 	
@@ -1038,6 +1048,7 @@ void handle_input(float tusec){
 	//Down
 	if(g_keys->keyDown[VK_NUMPAD3] == TRUE){
 		player[0].ship.Brake(0.5,tusec);	
+		obj_man.Move(-.5,tusec);	
 	}
 	if(g_keys->keyDown[VK_DOWN] == TRUE){
 		player[0].ship.Brake(0.5,tusec);	

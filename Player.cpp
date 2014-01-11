@@ -176,7 +176,8 @@ void Obj::init(vect2* pos, float* rot, float* sz){
 	//momentum.x =1;
 	//momentum.y =1;
 
-	mass = 15;
+	*size = ((rand()%500)+500)/1000.0f;
+	mass = (*size) * 15;
 
 	velocity.x = momentum.x / mass;
 	velocity.y = momentum.y / mass;
@@ -187,7 +188,8 @@ void Obj::init(vect2* pos, float* rot, float* sz){
 	*rotation = 1;
 	drot =  ((rand()%500)+500)/10000.0f;
 
-	*size = ((rand()%500)+500)/1000.0f;
+	
+
 	//*size = 1;
 }
 
@@ -196,36 +198,93 @@ void Obj::updateMomentum(void){
 	momentum.y = velocity.y * mass;
 }
 
+
+void set_attraction_force(Obj *a, Obj* b){
+	float G = .7;	
+
+
+	vect2 diff = vect_diff(a->position,b->position);
+
+	//Force between a and b.
+	float force = G*(a->mass*b->mass)/vect_abs_sqare(&diff);
+
+	//Make a vector
+	vect2 vec_f;
+	vec_f.x = 1;
+	vec_f.y = 0;
+
+	//Rotate
+	float ang = atan2(diff.y,diff.x);
+
+	a->force.x += -cosf(ang)*force;
+	a->force.y += -sinf(ang)*force;
+
+
+	b->force.x += cosf(ang)*force;
+	b->force.y += sinf(ang)*force;
+}
+
+
+
  /*
 	Does physics that are appicable to any object.
 	An inherited class must call this funtion at the end of it's own doPhysics.
  */
  void Obj::doObjPhysics(float ticks){
-	 float dt = ticks/20000;
+	float dt = ticks/20000;
+	float constant = 0.04f;
+	float dvx,dvy,dx,dy,dfx,dfy;
+	
+	dfx = force.x * dt;
+	dfy = force.y * dt;
 
+	//Change in acceleration
+	acceleration.x = force.x / mass;
+	acceleration.y = force.y / mass;
+
+	//Change in velocity:
+	dvx = acceleration.x * dt;
+	dvy = acceleration.y * dt;
+
+	//Change in position
+	dx = velocity.x * dt;
+	dy = velocity.y * dt;
+
+	//Update position with old velocity.
+	(*position).x += dx*constant;
+	(*position).y += dy*constant;
+
+	//Update velocity with old acceleration.
+	velocity.x += dvx*constant;
+	velocity.y += dvy*constant;
+
+	//Update acceleration with old force.
+	//acceleration.x += dfx*constant;
+	//acceleration.y += dfy*constant;
+	
+	//Update momentum
 	updateMomentum();
 
+	//Apply some speed limits.
 	if (vect_abs_sqare(&velocity) > 100){
-		momentum.x = momentum.x / 2;
-		momentum.y = momentum.y / 2;
+		momentum.x /= 2;
+		momentum.y /= 2;
+		velocity.x /= 2;
+		velocity.y /= 2;
 	}
-	
-	(*position).x += dt*velocity.x*0.04f;
-	(*position).y += dt*velocity.y*0.04f;
 
+	//The rest.
 	*rotation +=drot;
-
  }
 
  /*
 	Check if you have collided with another object.
  */
- bool Obj::checkCollision(Obj* obj){
-	 return inrange_cube(this->position,obj->position,this->size,obj->size);
- }
-
-
- void ObjManager::doPhysics(float ticks){
+bool Obj::checkCollision(Obj* obj){
+	return inrange_cube(this->position,obj->position,this->size,obj->size);
+}
+  
+void ObjManager::doPhysics(float ticks){
 	//Rotate mah balllz.
 	/*
 	for(int i =0;i<num_balls;i++){
@@ -233,11 +292,17 @@ void Obj::updateMomentum(void){
 			g_vertex_rotation[(i*8)+r] += 0.1f;
 		}
 	}*/
-
+	//Let there be gravity, reset all force:
+	for (int i=0;i<num_balls;i++){
+		object[i].force.x= 0;
+		object[i].force.y= 0;
+	}
 	//Check collision.
 	for (int i=0;i<num_balls;i++){
 		object[i].doObjPhysics(ticks);
 		for (int r=i+1;r<num_balls;r++){
+			//Set attraction force.
+			//set_attraction_force(&object[i],&object[r]);
 			if (object[i].checkCollision(&object[r])){
 				
 				//The difference in position.
@@ -251,9 +316,10 @@ void Obj::updateMomentum(void){
 				overlap -= (*(object[i].size)/2);
 				
 				if (overlap< 0){
-					if (i==0){
-						i = 0;
+					if ((i==1)|| (r==1)){
+						sound_play(SND_BOUNCE,50);
 					}
+
 					//Their radiusses overlap. dposabs is the length of overlap.
 					vect2 unit = vect_unit(&dpos);
 
@@ -269,13 +335,103 @@ void Obj::updateMomentum(void){
 					/*	
 					 In a perfectly elastic collision, kinetic energy is conserved.
 					 In a perfectly inelastic collision, the momentum is conseverd.
-					 First: They should bounce by leaving with the same angle as making contact:
+					 
+					 We must calculate each balls velocity by rotation their vectors to
+					 a collision frame of reference. 
+					 We can then find their 1D velocity change along this reference, and 
+					 rotate back. 
+
+					 obj[i] = a, obj[r] = b;
 					*/
+					//break;
+					float m1 = object[i].mass;
+					float m2 = object[r].mass;
+
+					//Angle by which to rotate so we get an x-aligned reference frame:
+					float dir_col = atan2(dpos.y,dpos.x)-(PI/2);
+
+					//Get values and direction:					
+					vect2 vel_ia = object[i].velocity;
+					float dir_ia = atan2(vel_ia.y,vel_ia.x);
+					float mag_ia = vect_abs(&vel_ia);
+					
+					vect2 vel_ib = object[r].velocity;
+					float dir_ib = atan2(vel_ib.y,vel_ib.x);
+					float mag_ib = vect_abs(&vel_ib);
+					
+					//Transpose
+					vect2 vel_ta;
+					vect2 vel_tb;
+
+					if (dir_col < (0)){
+						dir_col = (-PI/2) - dir_col;
+					}else{
+						dir_col  = (PI/2) - dir_col;
+					}
+
+					float rot_backa = dir_col;
+					float rot_backb = dir_col;
+
+					//vel_ta.x = mag_ia * cos(rot_backa);
+					//vel_ta.y = mag_ia * sin(rot_backa);
+
+					//vel_tb.x = mag_ib * cos(rot_backb);
+					//vel_tb.y = mag_ib * sin(rot_backb);
+
+					vel_ta.x =  (object[i].velocity.x * cosf(rot_backa)) - (object[i].velocity.y * sinf(rot_backa));
+					vel_ta.y =  (object[i].velocity.x * sinf(rot_backa)) + (object[i].velocity.y * cosf(rot_backa));
+
+					vel_tb.x =  (object[r].velocity.x * cosf(rot_backb)) - (object[r].velocity.y * sinf(rot_backb));
+					vel_tb.y =  (object[r].velocity.x * sinf(rot_backb)) + (object[r].velocity.y * cosf(rot_backb));
+
+
+					//Apply 1D collision:
+					float vel_tfax;
+					float vel_tfbx;
+					float vel_cm;
+
+					vel_cm = ((m1*vel_ta.x) + (m2*vel_tb.x))/(m1+m2);
+
+					vel_tfax = vel_ta.x - vel_cm;
+					vel_tfbx = vel_tb.x - vel_cm;
+
+					vel_tfax = -vel_tfax;
+					vel_tfbx = -vel_tfbx;
+
+					vel_tfax += vel_cm;
+					vel_tfbx += vel_cm;
+
+
+					//vel_tfax = ((vel_ta.x*(m1-m2))+ (2* m2 *vel_tb.x))/(m1+m2);
+					//vel_tfbx = ((vel_tb.x*(m1-m2))+ (2* m2 *vel_ta.x))/(m1+m2);
+
+					//Now rotate everything back:
+					vect2 vel_fa;
+					vect2 vel_fb;
+
+					vel_fa.x = vel_tfax;
+					vel_fa.y = vel_ta.y;
+
+					vel_fb.x = vel_tfbx;
+					vel_fb.y = vel_tb.y;
+
+					rot_backa = -rot_backa;
+					rot_backb = -rot_backb;
+					
+					object[i].velocity.x = (vel_fa.x * cosf(rot_backa)) - (vel_fa.y * sinf(rot_backa));
+					object[i].velocity.y = (vel_fa.x * sinf(rot_backa)) + (vel_fa.y * cosf(rot_backa));
+
+					object[r].velocity.x = (vel_fb.x * cosf(rot_backb)) - (vel_fb.y * sinf(rot_backb));
+					object[r].velocity.y = (vel_fb.x * sinf(rot_backb)) + (vel_fb.y * cosf(rot_backb));
+					
+					object[i].updateMomentum();
+					object[r].updateMomentum();
+					/*
 										
 					//Set their velocity based on angle of collision:
 					//i:
 					float ang_impi = atan2(object[i].velocity.y,object[i].velocity.x);
-					float ang_norm = atan2(dpos.y,dpos.x)+(PI/2);
+					float ang_norm = atan2(dpos.y,dpos.x);
 					
 					float ang_dif = -2*(ang_impi - ang_norm);
 
@@ -288,7 +444,7 @@ void Obj::updateMomentum(void){
 					vel_afu = vect_unit(&object[i].velocity);
 					//r:
 					float ang_impr = atan2(object[r].velocity.y,object[r].velocity.x);
-					ang_norm = atan2(dpos.y,dpos.x)+(PI/2);
+					ang_norm = atan2(dpos.y,dpos.x);
 				
 					ang_dif =-2*(ang_impr - ang_norm);
 				
@@ -304,9 +460,9 @@ void Obj::updateMomentum(void){
 					 These where actually just for getting their directions.
 					 Now we need to conserve the momentum: Pai + Pbi = Paf + Pbf
 					*/
-					vect2 vel_sumi = vect_sum(&vel_ai,&vel_bi);
-					float vel_sumi_abs = vect_abs(&vel_sumi);
-					float mass_tot = object[i].mass + object[r].mass;
+					//vect2 vel_sumi = vect_sum(&vel_ai,&vel_bi);
+					//float vel_sumi_abs = vect_abs(&vel_sumi);
+					//float mass_tot = object[i].mass + object[r].mass;
 
 					/*
 					 Both objects get a fraction of the mommentum depending on their mass relation:
@@ -326,7 +482,7 @@ void Obj::updateMomentum(void){
 		}
 
 		//Check bounds
-		int bound = 10.0f;
+		int bound = 20.0f;
 		int bound_hyst = 0;
 
 		/*
@@ -411,10 +567,10 @@ ObjManager::ObjManager(){
 	orientation = 0;
 	zoom = .2;
 
-	 b_position[0] =.1;
-	 b_position[1] =.1;
-	 b_position[2] =.2;
-	 b_position[3] =.2;
+	b_position[0] =.1;
+	b_position[1] =.1;
+	b_position[2] =.2;
+	b_position[3] =.2;
 
 	for (int i=0;i<num_balls;i++){
 		g_vertex_data[(8*i)+0] = -1;
@@ -465,20 +621,20 @@ ObjManager::ObjManager(){
 	}
 
 	//Test 5 balls.
-	(*object[0].size) = 1;
-	object[0].mass = 1;
-	(*object[0].position).x = 0;
-	(*object[0].position).y = 0;
-	object[0].velocity.x = -1;
-	object[0].velocity.y = -1;
+	(*object[0].size) = 2;
+	object[0].mass = 50;
+	(*object[0].position).x = -0;
+	(*object[0].position).y = -0;
+	object[0].velocity.x = 0;
+	object[0].velocity.y = 0;
 	object[0].updateMomentum();  
 
-	(*object[1].size) = 1;
-	object[1].mass = 1;
-	(*object[1].position).x = 3;
-	(*object[1].position).y = 3;
-	object[1].velocity.x = -2;
-	object[1].velocity.y = -2;
+	(*object[1].size) = .5;
+	object[1].mass = 1.5;
+	(*object[1].position).x = -3;
+	(*object[1].position).y = .22;
+	object[1].velocity.x = 1/2.00;
+	object[1].velocity.y = -.1;
 	object[1].updateMomentum();
 	/*
 	(*object[2].size) = 1;
@@ -590,6 +746,7 @@ void ObjManager::init_shaders(){
 	//va_textures[1]= glGetUniformLocation(shader_program, "textures[1]");
 
 	va_zoom = glGetUniformLocation(shader_program, "zoom");
+	va_relative = glGetUniformLocation(shader_program, "relative");
 
 	//Fragent shader.
 	va_color = glGetUniformLocation(shader_program, "color");	
@@ -640,10 +797,30 @@ GLuint ObjManager::make_program(GLuint vertex_shader, GLuint fragment_shader) {
 }
 
 void ObjManager::Rotate(float by, float t){
+	by /= 4.0f;
 	//orientation += by;
 	//	this->ball.orientation += by;
+	float a = vect_abs(&object[1].velocity);
+	float ang = atan2(object[1].velocity.y,object[1].velocity.x);
+	object[1].velocity.x = cosf(ang+by)* a;
+	object[1].velocity.y = sinf(ang+by)* a;
+	object[1].updateMomentum();
+
 }
 
+void ObjManager::Move(float by, float t){
+	by /= 40.0f;
+	//orientation += by;
+	//	this->ball.orientation += by;
+	float a = vect_abs(&object[1].velocity);
+	float ang = atan2(object[1].velocity.y,object[1].velocity.x);
+	a+= by;
+
+	object[1].velocity.x = cosf(ang)* a;
+	object[1].velocity.y = sinf(ang)* a;
+	object[1].updateMomentum();
+
+}
 
 void ObjManager::render(void){
     //glClearColor(0.15f, 0.15f, 0.15f, 1.0f);
@@ -747,6 +924,7 @@ void ObjManager::render(void){
 	//glUniform2f(va_location, b_position[0],b_position[0]);
 	//glUniform1f(va_rotation, b_rotation[0]);
 	glUniform1f(va_zoom, zoom);
+	glUniform2f(va_relative,-(*object[1].position).x,-(*object[1].position).y);
 	//glUniform1f(va_scale, 1);
 
 //	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER_ARB, element_buffer);				
